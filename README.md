@@ -1,12 +1,12 @@
 # pDoge Bridge
-
-### UNAUDITED VERSION - DO NOT USE IN PRODUCTION
-
-<div align="center">
-<img src="./static/pdoge_slide.png" width="70%" />
-</div>
+<b>NOTE: This is an unaudited, pre-release reference implmentation of pDoge. Do not use in production.</b>
 
 ## 1. Overview
+
+<div align="center">
+<img src="./static/pdoge_slide.png" width="90%" />
+</div>
+
 pDoge is a **maximally-secure, bi-directional bridge** connecting Dogecoin (PoW) and Solana (PoS), utilizing **Zero-Knowledge Proofs (ZKPs)** to cryptographically verify the state of the Dogecoin blockchain directly on Solana.
 
 Unlike standard federation bridges that rely entirely on a committee of signers for both deposits and withdrawals, pDoge creates a **ZK Light Client** on Solana. This allows the Solana smart contract to verify Dogecoin Proof-of-Work (AuxPoW) and transaction inclusion mathematically, removing the need to trust an intermediary for deposits.
