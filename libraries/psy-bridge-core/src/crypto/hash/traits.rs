@@ -1,0 +1,116 @@
+
+use crate::{common_types::{QHash160, QHash256}, crypto::hash::{ripemd160_impl::hash_impl_ripemd160_bytes, sha256_impl::hash_impl_sha256_bytes}};
+
+pub trait ZeroableHash: Sized + Copy + Clone {
+    fn get_zero_value() -> Self;
+}
+impl<const N: usize> ZeroableHash for [u8; N] {
+    fn get_zero_value() -> Self {
+        [0; N]
+    }
+}
+
+pub trait BytesHasher<Hash: PartialEq> {
+    fn hash_bytes(data: &[u8]) -> Hash;
+}
+
+pub trait MerkleHasher<Hash: PartialEq> {
+    fn two_to_one(left: &Hash, right: &Hash) -> Hash;
+    fn two_to_one_swap(swap: bool, left: &Hash, right: &Hash) -> Hash {
+        if swap {
+            Self::two_to_one(right, left)
+        }else{
+            Self::two_to_one(left, right)
+        }
+    }
+}
+
+pub trait MerkleZeroHasher<Hash: PartialEq>: MerkleHasher<Hash> {
+    fn get_zero_hash(reverse_level: usize) -> Hash;
+}
+
+pub fn iterate_merkle_hasher<Hash: PartialEq, Hasher: MerkleHasher<Hash>>(
+    mut current: Hash,
+    reverse_level: usize,
+) -> Hash {
+    for _ in 0..reverse_level {
+        current = Hasher::two_to_one(&current, &current);
+    }
+    current
+}
+
+pub fn get_zero_hashes<Hash: PartialEq + ZeroableHash, Hasher: MerkleHasher<Hash>>(
+    count: usize,
+) -> Vec<Hash> {
+    let mut hashes = Vec::with_capacity(count);
+    hashes.push(Hash::get_zero_value());
+    for i in 1..count {
+        hashes.push(Hasher::two_to_one(&hashes[i - 1], &hashes[i - 1]));
+    }
+    hashes
+}
+
+pub fn get_zero_hashes_sized<Hash: PartialEq + ZeroableHash + Copy, Hasher: MerkleHasher<Hash>, const N: usize>() -> [Hash; N] {
+    let v = Hash::get_zero_value();
+    let mut hashes = [v; N];
+    for i in 1..N {
+        hashes[i] = Hasher::two_to_one(&hashes[i - 1], &hashes[i - 1]);
+    }
+    hashes
+}
+
+
+pub const ZERO_HASH_CACHE_SIZE: usize = 128;
+pub trait MerkleZeroHasherWithCache<Hash: PartialEq + Copy>: MerkleHasher<Hash> {
+    const CACHED_ZERO_HASHES: [Hash; ZERO_HASH_CACHE_SIZE];
+}
+impl<Hash: PartialEq + Copy, T: MerkleZeroHasherWithCache<Hash>> MerkleZeroHasher<Hash> for T {
+    fn get_zero_hash(reverse_level: usize) -> Hash {
+        if reverse_level < ZERO_HASH_CACHE_SIZE {
+            T::CACHED_ZERO_HASHES[reverse_level]
+        } else {
+            let current = T::CACHED_ZERO_HASHES[ZERO_HASH_CACHE_SIZE - 1];
+            iterate_merkle_hasher::<Hash, Self>(current, reverse_level - ZERO_HASH_CACHE_SIZE + 1)
+        }
+    }
+}
+
+
+pub trait QStandardHasher<Hash: PartialEq + Copy>: MerkleHasher<Hash> + BytesHasher<Hash> + MerkleZeroHasher<Hash> {
+}
+
+impl<T: MerkleHasher<Hash> + BytesHasher<Hash> + MerkleZeroHasher<Hash>, Hash: PartialEq + Copy> QStandardHasher<Hash> for T {
+}
+
+
+
+
+pub trait DogeHashProvider {
+    fn hash_bytes_sha256(data: &[u8]) -> QHash256;
+    fn hash_bytes_ripemd160(data: &[u8]) -> QHash160;
+
+    // performs ripemd160(sha256(data))
+    fn bitcoin_hash160(data: &[u8]) -> QHash160 {
+        let sha256_hash = Self::hash_bytes_sha256(data);
+        Self::hash_bytes_ripemd160(&sha256_hash)
+    }
+
+    // performs sha256(sha256(data))
+    fn bitcoin_hash256(data: &[u8]) -> QHash256 {
+        let first_hash = Self::hash_bytes_sha256(data);
+        Self::hash_bytes_sha256(&first_hash)
+    }
+
+}
+
+
+pub struct CommonDogeHashProvider;
+
+impl DogeHashProvider for CommonDogeHashProvider {
+    fn hash_bytes_sha256(data: &[u8]) -> QHash256 {
+        hash_impl_sha256_bytes(data)
+    }
+    fn hash_bytes_ripemd160(data: &[u8]) -> QHash160 {
+        hash_impl_ripemd160_bytes(data)
+    }
+}

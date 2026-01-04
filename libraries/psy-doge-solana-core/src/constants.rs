@@ -1,0 +1,1 @@
+pub const PSY_DOGE_BRIDGE_MAX_REORG_BLOCKS: usize = 10;

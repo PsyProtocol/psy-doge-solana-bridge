@@ -1,0 +1,22 @@
+{
+  "name": "doge-bridge-client-js",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.87.6",
+    "@solana/spl-token": "^0.3.8",
+    "bn.js": "^5.2.1",
+    "buffer": "^6.0.3",
+    "borsh": "^0.7.0",
+    "buffer-layout": "^1.2.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/bn.js": "^5.1.0",
+    "@types/node": "^20.0.0"
+  }
+}

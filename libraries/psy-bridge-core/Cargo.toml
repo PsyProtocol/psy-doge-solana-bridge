@@ -1,0 +1,59 @@
+[package]
+name = "psy-bridge-core"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["serialize_borsh", "serialize_bytemuck", "secp256k1", "std", "sha2"]
+serialize_borsh = ["dep:borsh", "zerocopy/borsh"]
+serialize_serde = ["dep:serde", "dep:serde_with", "zerocopy/serde"]
+solprogram = ["dep:solana-program", "sp1_groth16"]
+secp256k1 = ["dep:k256"]
+sha2 = ["dep:sha2"]
+sp1 = ["dep:sha2-v0-10-9"]
+std = []
+sp1_groth16 = ["dep:sp1-solana"]
+serialize_speedy = ["dep:speedy", "zerocopy/speedy"]
+serialize_bytemuck = ["dep:bytemuck", "zerocopy/bytemuck"]
+
+[dependencies]
+sp1-solana = { git = "https://github.com/succinctlabs/sp1-solana", optional = true }
+
+sha2-v0-10-9 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-4.0.0", optional = true }	
+macro_rules_attribute = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_with = { workspace = true, optional = true }
+ripemd = { workspace = true }
+borsh = { workspace = true, optional = true }
+thiserror = { workspace = true }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+zerocopy = { workspace = true }
+zerocopy-derive = { workspace = true }
+anyhow = { workspace = true }
+bytemuck = { workspace = true, optional = true }
+speedy = { workspace = true, optional = true }
+solana-program = { workspace = true, optional = true }
+solana-program-error = { workspace = true }
+sha2 = { workspace = true, optional = true }
+
+k256 = { workspace = true, features = [
+  "arithmetic",
+  "ecdsa",
+  "pkcs8",
+  "precomputed-tables",
+  "schnorr",
+  "signature",
+  "std",
+  "serde",
+], optional = true }
+
+[dev-dependencies]
+hex = { workspace = true }
+hex-literal = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
+
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

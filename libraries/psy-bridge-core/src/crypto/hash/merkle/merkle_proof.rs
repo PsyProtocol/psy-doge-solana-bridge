@@ -1,0 +1,168 @@
+
+
+use crate::crypto::hash::traits::MerkleHasher;
+
+use super::{delta_merkle_proof::DeltaMerkleProofCore, utils::compute_root_merkle_proof_generic};
+
+
+
+
+#[cfg_attr(feature = "serialize_serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize_borsh", derive(borsh::BorshSerialize, borsh::BorshDeserialize))]
+#[cfg_attr(feature = "serialize_speedy", derive(speedy::Readable, speedy::Writable))]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MerkleProofCore<Hash: PartialEq + Copy> {
+    pub root: Hash,
+    pub value: Hash,
+
+    pub index: u64,
+    pub siblings: Vec<Hash>,
+}
+
+
+
+
+#[cfg_attr(feature = "serialize_serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize_borsh", derive(borsh::BorshSerialize, borsh::BorshDeserialize))]
+#[cfg_attr(feature = "serialize_speedy", derive(speedy::Readable, speedy::Writable))]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MerkleProofCorePartial<Hash: PartialEq + Copy> {
+    pub value: Hash,
+    pub index: u64,
+    pub siblings: Vec<Hash>,
+}
+
+impl<Hash: PartialEq + Copy + Default> Default for MerkleProofCore<Hash> {
+    fn default() -> Self {
+        Self {
+            root: Default::default(),
+            value: Default::default(),
+            index: Default::default(),
+            siblings: Default::default(),
+        }
+    }
+}
+impl<Hash: PartialEq + Copy> MerkleProofCore<Hash> {
+    pub fn new_from_params<Hasher: MerkleHasher<Hash>>(
+        index: u64,
+        value: Hash,
+        siblings: Vec<Hash>,
+    ) -> Self {
+        let root = compute_root_merkle_proof_generic::<Hash, Hasher>(value, index, &siblings);
+        Self {
+            root,
+            value,
+            index,
+            siblings,
+        }
+    }
+    pub fn verify<Hasher: MerkleHasher<Hash>>(&self) -> bool {
+        compute_root_merkle_proof_generic::<Hash, Hasher>(self.value, self.index, &self.siblings)
+            == self.root
+    }
+    pub fn verify_btc_block_tx_tree<Hasher: MerkleHasher<Hash>>(&self) -> bool {
+        let mut current = self.value;
+        let mut index_tracker = self.index;
+        for sibling in self.siblings.iter() {
+            if (index_tracker & 1) == 0 {
+                current = Hasher::two_to_one(&current, sibling);
+            } else {
+                if sibling.eq(&current) {
+                    // if the current path is on the right and the left sibling is the same, then the current path is not part of the valid tree span
+                    return false;
+                }
+                current = Hasher::two_to_one(sibling, &current);
+            }
+            index_tracker >>= 1;
+        }
+        if index_tracker != 0 {
+            // wrong number of siblings
+            return false;
+        }
+        current == self.root
+    }
+    pub fn into_delta_merkle_proof(self) -> DeltaMerkleProofCore<Hash> {
+        DeltaMerkleProofCore {
+            old_root: self.root,
+            new_root: self.root,
+            old_value: self.value,
+            new_value: self.value,
+            index: self.index,
+            siblings: self.siblings,
+        }
+    }
+    pub fn to_delta_merkle_proof(&self) -> DeltaMerkleProofCore<Hash> {
+        DeltaMerkleProofCore {
+            old_root: self.root,
+            new_root: self.root,
+            old_value: self.value,
+            new_value: self.value,
+            index: self.index,
+            siblings: self.siblings.clone(),
+        }
+    }
+}
+
+
+
+impl<Hash: PartialEq + Copy + Default> Default for MerkleProofCorePartial<Hash> {
+    fn default() -> Self {
+        Self {
+            value: Default::default(),
+            index: Default::default(),
+            siblings: Default::default(),
+        }
+    }
+}
+
+
+impl<Hash: PartialEq + Copy> MerkleProofCorePartial<Hash> {
+    pub fn new_from_params(
+        index: u64,
+        value: Hash,
+        siblings: Vec<Hash>,
+    ) -> Self {
+        Self {
+            value,
+            index,
+            siblings,
+        }
+    }
+    pub fn to_full<Hasher: MerkleHasher<Hash>>(&self) -> MerkleProofCore<Hash> {
+        let root = compute_root_merkle_proof_generic::<Hash, Hasher>(self.value, self.index, &self.siblings);
+        MerkleProofCore {
+            root,
+            value: self.value,
+            index: self.index,
+            siblings: self.siblings.clone(),
+        }
+    }
+    pub fn into_full<Hasher: MerkleHasher<Hash>>(self) -> MerkleProofCore<Hash> {
+        let root = compute_root_merkle_proof_generic::<Hash, Hasher>(self.value, self.index, &self.siblings);
+        MerkleProofCore {
+            root,
+            value: self.value,
+            index: self.index,
+            siblings: self.siblings,
+        }
+    }
+}
+
+impl<Hash: PartialEq + Copy> From<MerkleProofCore<Hash>> for MerkleProofCorePartial<Hash> {
+    fn from(value: MerkleProofCore<Hash>) -> Self {
+        Self {
+            value: value.value,
+            index: value.index,
+            siblings: value.siblings,
+        }
+    }
+}
+impl<Hash: PartialEq + Copy> From<&MerkleProofCore<Hash>> for MerkleProofCorePartial<Hash> {
+    fn from(value: &MerkleProofCore<Hash>) -> Self {
+        Self {
+            value: value.value,
+            index: value.index,
+            siblings: value.siblings.clone(),
+        }
+    }
+}

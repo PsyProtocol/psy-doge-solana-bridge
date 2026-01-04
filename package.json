@@ -1,0 +1,12 @@
+{
+  "name": "doge-solana-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build:sbf": "cargo build-sbf --workspace",
+    "test:integration": "cargo build-sbf --workspace && cargo test --workspace -- --nocapture"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

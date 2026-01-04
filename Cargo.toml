@@ -1,0 +1,117 @@
+[workspace]
+resolver = "2"
+members = [
+    "programs/pending-mint-buffer",
+    "programs/txo-buffer",
+    "programs/generic-buffer",
+    "programs/doge-bridge",
+    "programs/manual-claim",
+    "libraries/psy-bridge-core",
+    "libraries/psy-doge-solana-core",
+    "clients/rust",
+    "tests/test-utils",
+    "tests/integration"
+]
+
+[workspace.dependencies]
+macro_rules_attribute = "0.2.2"
+
+k256 = { version = "0.13.2", features = [
+  "arithmetic",
+  "ecdsa",
+  "precomputed-tables",
+  "schnorr",
+  "signature",
+  "std",
+] }
+bs58 = { version = "0.5.1", default-features = false, features = ["check", "alloc"] }
+ripemd = "0.1.3"
+borsh = { version = "0.10.4"}
+thiserror = "^1.0"
+num-derive = "^0.4"
+num-traits = "^0.2"
+zerocopy = { git = "https://github.com/cf/zerocopy-borsh-serde", branch = "borsh-serde-speedy-bytemuck-v0.8.23-ns" }
+zerocopy-derive = { git = "https://github.com/cf/zerocopy-borsh-serde", branch = "borsh-serde-speedy-bytemuck-v0.8.23-ns" }
+paste = "1.0.15"
+syn = { version = "2.0", features = ["full"] }
+proc-macro2 = { version = "1.0", features = ["span-locations"] }
+quote = "1.0"
+
+anyhow = { version = "1.0.75", default-features = false, features = [] }
+
+litesvm = "0.6.1"
+solana-sdk = "=2.2.1"
+solana-client = "=2.2.1" # RPC Client
+solana-program = { version = "=2.2.1"}
+solana-program-error = "2.2.1"
+solana-program-test = "2.2.1"
+sha2 = { version = "0.10.8"}
+
+bytemuck = { version = "1.24.0", features = ["derive", "min_const_generics", "extern_crate_alloc"] }
+
+hex = "0.4.3"
+hex-literal = "0.4.1"
+rand = "0.8"
+rand_core = "0.6.0"
+speedy = "0.8.7"
+
+embedded-io = "0.7.0"
+embedded-io-async = "0.7.0"
+
+async-trait = { version = "0.1.88" }
+tokio = { version = "1.43.0", features = ["full"] }
+futures-util = { version = "0.3.28" }
+
+reqwest = { version = "=0.12.24", features = ["json"] }
+auto_impl = "1"
+strum = "0.27"
+strum_macros = "0.27"
+
+
+crossterm = "0.27"
+const_format = "0.2.35"
+crossbeam-skiplist = "0.1"
+rustyline-derive = "0.11.1"
+
+shell-words = "1.1"
+colored = "2"
+serde = { version = "1.0.193", features = ["derive"] }
+serde_json = "1.0"
+serde_with = { version = "3.4.0", features = ["hex", "macros"] }
+serde_repr = "0.1.19"
+serde_yaml = "0.9"
+dotenv = "0.15"
+rustyline = "=5.0.2"
+async-nats = "0.33"
+redis = { version = "0.32.7", features = ["tokio-comp"] }
+futures = "0.3"
+tracing = "0.1"
+dashmap = "5.5" # For concurrent tracking of active NATS messages
+
+bincode = { version = "=1.3.3" }
+
+ts-rs = "10.1.0"
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.20", features = [
+    "std",
+    "env-filter",
+    "json",
+    "chrono",
+    "ansi"
+] }
+bytes = "1"
+log = { version = "0.4.14", default-features = false }
+env_logger = { version = "0.11", default-features = false }
+chalk = "0.1"
+rayon = "1.11.0"
+uuid = { version = "1.0", features = ["serde", "v4", "js"] }
+
+# SPL Dependencies
+spl-token = "8.0.0"
+spl-associated-token-account = "7.0.0"
+
+# Dev dependencies
+criterion = { version = "0.5.1", features = ["async_tokio", "async_futures"] }
+
+[patch.crates-io]
+curve25519-dalek = { git = "https://github.com/anza-xyz/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464" }

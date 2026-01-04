@@ -1,0 +1,27 @@
+[package]
+name = "doge-bridge"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = ["mock-zkp", "host-client"]
+wormhole = []
+solprogram = [ "psy-bridge-core/solprogram", "psy-doge-solana-core/solprogram" ]
+host-client = ["psy-bridge-core/std", "psy-doge-solana-core/std", "psy-bridge-core/sha2", "psy-doge-solana-core/sha2", "no-entrypoint" ]
+mock-zkp = []
+no-entrypoint = []
+custom-panic = []
+custom-heap = []
+
+[dependencies]
+solana-program = { workspace = true }
+borsh = { workspace = true }
+thiserror = { workspace = true }
+bytemuck = { workspace = true }
+spl-token = { workspace = true, features = ["no-entrypoint"] }
+
+psy-bridge-core = { path = "../../libraries/psy-bridge-core", default-features = false,  features = ["serialize_borsh", "serialize_bytemuck"] }
+psy-doge-solana-core = { path = "../../libraries/psy-doge-solana-core", default-features = false, features = ["serialize_borsh", "serialize_bytemuck"] }

@@ -1,0 +1,25 @@
+[package]
+name = "doge-bridge-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+solana-sdk = { workspace = true }
+solana-client = { workspace = true }
+solana-program = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+bytemuck = { workspace = true }
+borsh = { workspace = true }
+spl-token = { workspace = true }
+spl-associated-token-account = { workspace = true }
+
+psy-bridge-core = { path = "../../libraries/psy-bridge-core", features = ["std", "serialize_bytemuck"], default-features = false }
+psy-doge-solana-core = { path = "../../libraries/psy-doge-solana-core", features = ["std", "serialize_bytemuck", "fake_signer"], default-features = false }
+# doge-bridge = { path = "../../programs/doge-bridge", features = ["no-entrypoint"], default-features = false }
+# manual-claim = { path = "../../programs/manual-claim", features = ["no-entrypoint"], default-features = false }
+generic-buffer = { path = "../../programs/generic-buffer", features = ["no-entrypoint"], default-features = false }
+pending-mint-buffer = { path = "../../programs/pending-mint-buffer", features = ["no-entrypoint"], default-features = false }
+txo-buffer = { path = "../../programs/txo-buffer", features = ["no-entrypoint"], default-features = false }

@@ -1,0 +1,12 @@
+use psy_doge_solana_core::programs::{DOGE_BRIDGE_PROGRAM_ID_STR, GENERIC_BUFFER_BUILDER_PROGRAM_ID_STR, MANUAL_CLAIM_PROGRAM_ID_STR, PENDING_MINT_BUFFER_BUILDER_PROGRAM_ID_STR, TXO_BUFFER_BUILDER_PROGRAM_ID_STR};
+use solana_sdk::pubkey::Pubkey;
+
+pub const BRIDGE_STATE_SEED: &[u8] = b"bridge_state";
+pub const MANUAL_CLAIM_SEED: &[u8] = b"manual-claim";
+
+pub const DOGE_BRIDGE_PROGRAM_ID: Pubkey = Pubkey::from_str_const(DOGE_BRIDGE_PROGRAM_ID_STR);
+pub const MANUAL_CLAIM_PROGRAM_ID: Pubkey = Pubkey::from_str_const(MANUAL_CLAIM_PROGRAM_ID_STR);
+pub const PENDING_MINT_BUFFER_BUILDER_PROGRAM_ID: Pubkey = Pubkey::from_str_const(PENDING_MINT_BUFFER_BUILDER_PROGRAM_ID_STR);
+pub const GENERIC_BUFFER_BUILDER_PROGRAM_ID: Pubkey = Pubkey::from_str_const(GENERIC_BUFFER_BUILDER_PROGRAM_ID_STR);
+pub const TXO_BUFFER_BUILDER_PROGRAM_ID: Pubkey = Pubkey::from_str_const(TXO_BUFFER_BUILDER_PROGRAM_ID_STR);
+

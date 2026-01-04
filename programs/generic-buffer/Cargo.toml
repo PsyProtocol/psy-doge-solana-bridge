@@ -1,0 +1,18 @@
+[package]
+name = "generic-buffer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+mock-zkp = []
+no-entrypoint = []
+custom-panic = []
+custom-heap = []
+
+[dependencies]
+solana-program = { workspace = true }
+thiserror = { workspace = true }
+bytemuck = { workspace = true }

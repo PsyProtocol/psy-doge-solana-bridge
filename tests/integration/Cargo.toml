@@ -1,0 +1,19 @@
+[package]
+name = "doge-bridge-integration-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+doge-bridge-client = { path = "../../clients/rust" }
+doge-bridge-test-utils = { path = "../test-utils" }
+solana-program-test = { workspace = true }
+solana-sdk = { workspace = true }
+solana-client = { workspace = true }
+psy-bridge-core = { path = "../../libraries/psy-bridge-core", default-features = false, features = ["std", "serialize_bytemuck"] }
+psy-doge-solana-core = { path = "../../libraries/psy-doge-solana-core", default-features = false, features = ["std", "serialize_bytemuck", "fake_signer"] }
+tokio = { workspace = true }
+spl-token = { workspace = true }
+spl-associated-token-account = { workspace = true }
+doge-bridge = { path = "../../programs/doge-bridge", features = ["no-entrypoint"], default-features = false }
+bytemuck = { workspace = true }
+anyhow = { workspace = true }
