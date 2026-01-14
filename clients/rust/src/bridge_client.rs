@@ -7,8 +7,8 @@ use crate::{
     errors::ClientError,
     instructions,
 };
-use psy_bridge_core::
-    crypto::{hash::sha256_impl::hash_impl_sha256_bytes, zk::CompactBridgeZKProof}
+use psy_bridge_core::{
+    crypto::{hash::sha256_impl::hash_impl_sha256_bytes, zk::CompactBridgeZKProof}, header::PsyBridgeHeaderUpdate}
 ;
 use psy_doge_solana_core::{
     data_accounts::pending_mint::{PM_DA_DEFAULT_PENDING_MINTS_BUFFER_HASH, PM_TXO_DEFAULT_BUFFER_HASH, PendingMint}, instructions::doge_bridge::InitializeBridgeParams, program_state::{FinalizedBlockMintTxoInfo, PsyBridgeProgramState, PsyReturnTxOutput}
@@ -111,8 +111,9 @@ impl DogeBridgeClient {
     pub fn block_update_builder<'a>(
         &'a self,
         current_state: &'a PsyBridgeProgramState,
+        required_confirmations: u32,
     ) -> BlockUpdateBuilder<'a> {
-        BlockUpdateBuilder::new(self, current_state)
+        BlockUpdateBuilder::new(self, current_state, required_confirmations)
     }
 
     pub async fn request_withdrawal(
@@ -168,15 +169,17 @@ impl DogeBridgeClient {
 pub struct BlockUpdateBuilder<'a> {
     client: &'a DogeBridgeClient,
     current_state: &'a PsyBridgeProgramState,
+    header_update: Option<PsyBridgeHeaderUpdate>,
     proof: Option<CompactBridgeZKProof>,
     new_doge_block_height: Option<u32>,
     pending_mints: &'a [PendingMint],
     txo_indices: &'a [u32],
     extra_blocks: Vec<FinalizedBlockMintTxoInfo>,
+    pub required_confirmations: u32,
 }
 
 impl<'a> BlockUpdateBuilder<'a> {
-    pub fn new(client: &'a DogeBridgeClient, current_state: &'a PsyBridgeProgramState) -> Self {
+    pub fn new(client: &'a DogeBridgeClient, current_state: &'a PsyBridgeProgramState, required_confirmations: u32) -> Self {
         Self {
             client,
             current_state,
@@ -185,7 +188,13 @@ impl<'a> BlockUpdateBuilder<'a> {
             pending_mints: &[],
             txo_indices: &[],
             extra_blocks: vec![],
+            required_confirmations,
+            header_update: None,
         }
+    }
+    pub fn with_header_update(mut self, header_update: PsyBridgeHeaderUpdate) -> Self {
+        self.header_update = Some(header_update);
+        self
     }
 
     pub fn with_proof(mut self, proof: CompactBridgeZKProof) -> Self {
@@ -217,17 +226,22 @@ impl<'a> BlockUpdateBuilder<'a> {
             .new_doge_block_height
             .ok_or_else(|| ClientError::InvalidInput("New block height is required".to_string()))?;
 
+        let header_update = self.header_update
+            .ok_or_else(|| ClientError::InvalidInput("Header update is required".to_string()))?;
+        if new_height < self.current_state.bridge_header.finalized_state.block_height + self.required_confirmations {
+            return Err(ClientError::InvalidInput("New block height does not satisfy required confirmations".to_string()));
+        }
+
         let pending_mints_hash = compute_mints_hash(self.pending_mints);
         let txo_hash = compute_txo_hash(self.txo_indices);
+        let auto_claimed_deposits_next_index = self.current_state.bridge_header.finalized_state.auto_claimed_deposits_next_index + self.pending_mints.len() as u32;
 
-        let mut new_header = self.current_state.bridge_header.clone();
-        new_header.finalized_state.block_height = new_height;
+        let mut new_header = header_update.to_header(self.required_confirmations, pending_mints_hash, txo_hash, auto_claimed_deposits_next_index);
+        new_header.finalized_state.block_height = new_height-self.required_confirmations;
         new_header.tip_state.block_height = new_height;
         new_header.finalized_state.pending_mints_finalized_hash = pending_mints_hash;
         new_header.finalized_state.txo_output_list_finalized_hash = txo_hash;
-        new_header.finalized_state.auto_claimed_deposits_next_index +=
-            self.pending_mints.len() as u32;
-        new_header.tip_state = new_header.finalized_state.clone();
+        new_header.tip_state = header_update.tip_state;
 
         let (bridge_state_pda, _) =
             Pubkey::find_program_address(&[b"bridge_state"], &self.client.program_id);

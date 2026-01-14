@@ -4,7 +4,7 @@ use doge_bridge_test_utils::{
     BridgeTestContext,
 };
 use psy_bridge_core::
-    header::{PsyBridgeHeader, PsyBridgeStateCommitment}
+    header::{PsyBridgeHeader, PsyBridgeStateCommitment, PsyBridgeTipStateCommitment}
 ;
 use psy_doge_solana_core::{
     instructions::doge_bridge::InitializeBridgeParams,
@@ -27,7 +27,7 @@ async fn test_reorg_with_fast_forward() {
     };
     let initialize_params = InitializeBridgeParams {
         bridge_header: PsyBridgeHeader {
-            tip_state: PsyBridgeStateCommitment::default(),
+            tip_state: PsyBridgeTipStateCommitment::default(),
             finalized_state: PsyBridgeStateCommitment::default(),
             bridge_state_hash: [0u8; 32],
             last_rollback_at_secs: 0,

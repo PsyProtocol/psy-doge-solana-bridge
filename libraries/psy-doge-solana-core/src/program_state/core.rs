@@ -109,6 +109,7 @@ impl PsyBridgeProgramState {
                 .finalized_state
                 .auto_claimed_deposits_tree_root,
             requested_withdrawals_tree_root: self.requested_withdrawals_tree.get_root(),
+            manual_deposits_tree_root: self.manual_deposits_tree.get_root(),
             block_merkle_tree_root: self.bridge_header.finalized_state.block_merkle_tree_root,
             block_height: self.bridge_header.finalized_state.block_height,
             last_snapshotted_for_withdrawals_seconds: current_unix_timestamp_secs,

@@ -4,7 +4,7 @@ use doge_bridge::state::BridgeState;
 use doge_bridge_client::instructions::{
     block_update, process_mint_group, process_mint_group_auto_advance, process_reorg_blocks,
 };
-use psy_bridge_core::{crypto::hash::sha256_impl::hash_impl_sha256_bytes, error::QDogeResult};
+use psy_bridge_core::{crypto::hash::sha256_impl::hash_impl_sha256_bytes, error::QDogeResult, header::PsyBridgeTipStateCommitment};
 use psy_doge_solana_core::{
     data_accounts::pending_mint::{PendingMint, PM_MAX_PENDING_MINTS_PER_GROUP},
     generic_cpi::{AutoClaimMintBufferAddressHelper, LockAutoClaimMintBufferCPIHelper},
@@ -152,11 +152,15 @@ impl BlockTransitionHelper {
 
         let mut new_header = self.bridge_state.core_state.bridge_header.clone();
         new_header.finalized_state.block_height += 1;
-        new_header.tip_state.block_height += 1;
         new_header.finalized_state.pending_mints_finalized_hash = pending_mints_hash;
         new_header.finalized_state.txo_output_list_finalized_hash = txo_buffer_hash;
         new_header.finalized_state.auto_claimed_deposits_next_index += pending_mints.len() as u32;
-        new_header.tip_state = new_header.finalized_state.clone();
+        new_header.tip_state = PsyBridgeTipStateCommitment {
+            block_hash: [1u8; 32],
+            block_merkle_tree_root: [1u8; 32],
+            block_time: new_header.tip_state.block_time + 60,
+            block_height: new_header.tip_state.block_height + 1,
+        };
 
         let pub_inputs = get_block_transition_public_inputs(
             &self
@@ -340,7 +344,12 @@ impl BlockTransitionHelper {
         new_header.finalized_state.txo_output_list_finalized_hash =
             last_info.txo_output_list_finalized_hash;
         new_header.finalized_state.auto_claimed_deposits_next_index += total_new_deposits;
-        new_header.tip_state = new_header.finalized_state.clone();
+        new_header.tip_state = PsyBridgeTipStateCommitment {
+            block_hash: [1u8; 32],
+            block_merkle_tree_root: [1u8; 32],
+            block_time: new_header.tip_state.block_time + (blocks.len() as u32 * 60),
+            block_height: new_header.tip_state.block_height,
+        };
 
         let extra_blocks_refs: Vec<&FinalizedBlockMintTxoInfo> =
             block_infos.iter().take(block_infos.len() - 1).collect();
