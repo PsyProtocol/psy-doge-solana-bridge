@@ -184,7 +184,7 @@ impl PsyBridgeProgramState {
             &previous_header_hash,
             &new_header_hash,
             &self.config_params.get_hash(),
-            &self.bridge_doge_public_key_hash,
+            &self.custodian_wallet_config.get_wallet_config_hash(),
         );
 
         let is_zkp_valid =
@@ -307,7 +307,7 @@ impl PsyBridgeProgramState {
             &new_header_hash,
             extra_finalized_blocks,
             &self.config_params.get_hash(),
-            &self.bridge_doge_public_key_hash,
+            &self.custodian_wallet_config.get_wallet_config_hash(),
         );
         let is_zkp_valid =
             ZKVerifier::verify_compact_zkp_slice(proof, vk, &expected_zkp_public_inputs);

@@ -170,7 +170,7 @@ impl BlockTransitionHelper {
                 .get_hash_canonical(),
             &new_header.get_hash_canonical(),
             &self.bridge_state.core_state.config_params.get_hash(),
-            &self.bridge_state.core_state.bridge_doge_public_key_hash,
+            &self.bridge_state.core_state.custodian_wallet_config.get_wallet_config_hash(),
         );
         let proof = generate_block_update_fake_proof(pub_inputs);
 
@@ -365,7 +365,7 @@ impl BlockTransitionHelper {
             &new_header.get_hash_canonical(),
             &extra_blocks_refs,
             &self.bridge_state.core_state.config_params.get_hash(),
-            &self.bridge_state.core_state.bridge_doge_public_key_hash,
+            &self.bridge_state.core_state.custodian_wallet_config.get_wallet_config_hash(),
         );
         let proof = generate_block_update_reorg_fake_proof(pub_inputs);
 

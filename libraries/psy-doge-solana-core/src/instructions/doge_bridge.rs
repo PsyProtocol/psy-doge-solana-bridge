@@ -1,3 +1,4 @@
+use psy_bridge_core::custodian_config::BridgeCustodianWalletConfig;
 use psy_bridge_core::{common_types::QHash256, header::PsyBridgeHeader};
 use psy_bridge_core::crypto::zk::CompactBridgeZKProof;
 use crate::program_state::{FinalizedBlockMintTxoInfo, PsyBridgeConfig, PsyReturnTxOutput, PsyWithdrawalRequest};
@@ -19,6 +20,7 @@ pub struct InitializeBridgeParams {
     pub bridge_header: PsyBridgeHeader,
     pub start_return_txo_output: PsyReturnTxOutput,
     pub config_params: PsyBridgeConfig,
+    pub custodian_wallet_config: BridgeCustodianWalletConfig,
 }
 
 // 0. Initialize
@@ -30,6 +32,7 @@ pub struct InitializeBridgeInstructionData {
     pub bridge_header: PsyBridgeHeader,
     pub start_return_txo_output: PsyReturnTxOutput,
     pub config_params: PsyBridgeConfig,
+    pub custodian_wallet_config: BridgeCustodianWalletConfig,
 }
 
 #[macro_rules_attribute::apply(crate::DeriveCopySerializeReprC)]

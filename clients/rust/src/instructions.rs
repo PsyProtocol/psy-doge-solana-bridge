@@ -47,6 +47,7 @@ pub fn initialize_bridge(
         bridge_header: initialize_bridge_params.bridge_header,
         start_return_txo_output: initialize_bridge_params.start_return_txo_output,
         config_params: initialize_bridge_params.config_params,
+        custodian_wallet_config: initialize_bridge_params.custodian_wallet_config,
     };
     let data = gen_aligned_instruction(
         DOGE_BRIDGE_INSTRUCTION_INITIALIZE,

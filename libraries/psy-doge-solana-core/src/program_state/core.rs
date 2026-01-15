@@ -6,7 +6,7 @@ use psy_bridge_core::{
         sha256_impl::{
             hash_impl_sha256_bytes, hash_impl_sha256_two_to_one_bytes, hashv_impl_sha256_bytes
         },
-    }, error::{DogeBridgeError, QDogeResult}, header::{PsyBridgeHeader, PsyBridgeStateCommitment}, txo_constants::get_txo_block_number_tx_number_output_index_from_combined_index
+    }, custodian_config::BridgeCustodianWalletConfig, error::{DogeBridgeError, QDogeResult}, header::{PsyBridgeHeader, PsyBridgeStateCommitment}, txo_constants::get_txo_block_number_tx_number_output_index_from_combined_index
 };
 
 use crate::{ instructions::doge_bridge::InitializeBridgeInstructionData, program_state::{FinalizedBlockMintTxoManager, PsyReturnTxOutput, PsyWithdrawalChainSnapshot, PsyWithdrawalRequest}, utils::{deposit_leaf::hash_deposit_leaf, fees::{calcuate_deposit_fee, calcuate_withdrawal_fee}}};
@@ -34,6 +34,14 @@ impl PsyBridgeConfig {
     }
 }
 
+
+
+#[macro_rules_attribute::apply(crate::DeriveCopySerializeDefaultReprC)]
+pub struct BridgeProgramStateWithDogeMint {
+    pub core_state: PsyBridgeProgramState,
+    pub doge_mint: [u8; 32],
+}
+
 #[macro_rules_attribute::apply(crate::DeriveCopySerializeDefaultReprC)]
 pub struct PsyBridgeProgramState {
     pub bridge_header: PsyBridgeHeader,
@@ -48,9 +56,9 @@ pub struct PsyBridgeProgramState {
     pub manual_deposits_tree: FixedMerkleAppendTree,
     pub requested_withdrawals_tree: FixedMerkleAppendTree,
 
-    pub bridge_doge_public_key_hash: QHash160,
+    pub custodian_wallet_config: BridgeCustodianWalletConfig,
     pub bridge_control_mode: u32,
-    pub next_recent_finalized_block_index: u64,
+    pub next_recent_finalized_block_index: u32,
     pub last_processed_withdrawals_at_ms: u64,
     pub total_requested_withdrawals_sats: u64,
     pub total_fees_withdrawn_sats: u64,
@@ -77,7 +85,7 @@ impl PsyBridgeProgramState {
         self.manual_deposits_tree = FixedMerkleAppendTree::new_empty();
         self.requested_withdrawals_tree = FixedMerkleAppendTree::new_empty();
 
-        self.bridge_doge_public_key_hash = QHash160::default();
+        self.custodian_wallet_config =initialize_instruction.custodian_wallet_config;
         self.bridge_control_mode = 0;
         self.next_recent_finalized_block_index = 0;
         self.last_processed_withdrawals_at_ms = 0;

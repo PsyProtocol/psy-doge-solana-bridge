@@ -4,7 +4,7 @@ Copyright (C) 2025 Zero Knowledge Labs Limited, Psy Protocol
 */
 
 use crate::{
-    common_types::QHash256, crypto::hash::{merkle::{delta_merkle_proof::DeltaMerkleProofCore, merkle_proof::{MerkleProofCore, MerkleProofCorePartial}}, sha256::{QSha256Hasher, SHA256_ZERO_HASHES}, sha256_impl::{hash_impl_sha256_compute_merkle_root, hash_impl_sha256_two_to_one_bytes}}, error::{DogeBridgeError, QDogeResult}
+    common_types::QHash256, crypto::hash::{merkle::{append::update_siblings_append_merkle_tree, delta_merkle_proof::DeltaMerkleProofCore, merkle_proof::{MerkleProofCore, MerkleProofCorePartial}}, sha256::{QSha256Hasher, SHA256_ZERO_HASHES}, sha256_impl::{hash_impl_sha256_compute_merkle_root, hash_impl_sha256_two_to_one_bytes}}, error::{DogeBridgeError, QDogeResult}
 };
 
 const TREE_HEIGHT: usize = 32;
@@ -27,6 +27,29 @@ impl FixedMerkleAppendTreePartialMerkleProof {
     pub fn compute_root_sha256(&self) -> Hash {
         hash_impl_sha256_compute_merkle_root(&self.value, self.index, &self.siblings)
     }
+}
+
+pub fn get_changed_next_siblings_for_revert(
+    current_next_index: u64,
+    target_next_index: u64,
+    target_next_siblings: &[Hash],
+) -> QDogeResult<Vec<Hash>> {
+    if current_next_index == 0 || target_next_index >= current_next_index {
+         return Err(DogeBridgeError::RevertIndexTooHigh);
+    }
+    let mut changed_left_siblings = Vec::new();
+    let mut temp_index = target_next_index;
+    let mut changed_index = target_next_index ^ current_next_index;
+
+    for i in 0..TREE_HEIGHT {
+        if (temp_index & 1) != 0 && changed_index != 0 {
+            // Right child: Sibling is stored Left.
+            changed_left_siblings.push(target_next_siblings[i]);
+        }
+        temp_index >>= 1;
+        changed_index >>= 1;
+    }
+    Ok(changed_left_siblings)
 }
 
 #[macro_rules_attribute::apply(crate::DeriveCopySerializeDefaultReprC)]
@@ -61,70 +84,31 @@ impl FixedMerkleAppendTree {
         }
     }
 
-    pub fn new_empty_from_zero_hashes(
-        next_index: u64,
-        _zero_hashes: [Hash; TREE_HEIGHT],
-    ) -> Self {
-        if next_index == 0 {
-             Self::new_empty()
-        } else {
-             panic!("Cannot create empty tree with non-zero index without siblings");
-        }
-    }
-
     pub fn new_vec(
         next_index: u64,
-        zero_hashes: Vec<Hash>,
-        siblings: Vec<Hash>,
-        value: Hash,
+        next_siblings: Vec<Hash>,
     ) -> Self {
-        // We assert zero_hashes length but ignore content as we use global SHA256 constants
-        assert_eq!(zero_hashes.len(), TREE_HEIGHT);
-        assert_eq!(siblings.len(), TREE_HEIGHT);
+        assert_eq!(next_siblings.len(), TREE_HEIGHT);
         
-        let siblings_arr: [Hash; TREE_HEIGHT] = match siblings.try_into() {
+        let siblings_arr: [Hash; TREE_HEIGHT] = match next_siblings.try_into() {
             Ok(x) => x,
             Err(_) => panic!("Invalid siblings length"),
         };
         
-        Self::new(next_index, siblings_arr, value)
+        Self::new(next_index, siblings_arr)
     }
 
     pub fn new(
         next_index: u64,
-        siblings: [Hash; TREE_HEIGHT],
-        value: Hash,
+        next_siblings: [Hash; TREE_HEIGHT],
     ) -> Self {
         if next_index == 0 {
             return Self::new_empty();
         }
 
-        let mut next_siblings = core::array::from_fn(|i| SHA256_ZERO_HASHES[i]);
-        let mut current = value;
-        let mut current_index = next_index - 1;
-
-        for i in 0..TREE_HEIGHT {
-            let sibling = siblings[i];
-            let is_right_child = (current_index & 1) == 1;
-
-            if is_right_child {
-                // We are Right. The provided sibling is Left.
-                // We consume it to compute root, but we don't store it in frontier
-                // because the next append at this level will be a fresh Left child.
-                current = hash_impl_sha256_two_to_one_bytes(&sibling, &current);
-            } else {
-                // We are Left. We store ourselves in frontier for the future Right.
-                next_siblings[i] = current;
-                // We hash with Zero to compute the temporary root.
-                current = hash_impl_sha256_two_to_one_bytes(&current, &SHA256_ZERO_HASHES[i]);
-            }
-            
-            current_index >>= 1;
-        }
-
         Self {
             next_index,
-            current_root: current,
+            current_root: hash_impl_sha256_compute_merkle_root(&[0u8; 32], next_index, &next_siblings),
             next_siblings,
         }
     }
@@ -155,23 +139,8 @@ impl FixedMerkleAppendTree {
     // --- Mutations ---
 
     pub fn append(&mut self, new_value: Hash) {
-        let mut current = new_value;
-        let mut index = self.next_index;
-
-        for i in 0..TREE_HEIGHT {
-            if (index & 1) == 0 {
-                // Left Child
-                self.next_siblings[i] = current;
-                current = hash_impl_sha256_two_to_one_bytes(&current, &SHA256_ZERO_HASHES[i]);
-            } else {
-                // Right Child
-                let left = self.next_siblings[i];
-                current = hash_impl_sha256_two_to_one_bytes(&left, &current);
-            }
-            index >>= 1;
-        }
-
-        self.current_root = current;
+        let new_root = update_siblings_append_merkle_tree(&mut self.next_siblings, new_value, self.next_index);
+        self.current_root = new_root;
         self.next_index += 1;
     }
 
@@ -202,6 +171,50 @@ impl FixedMerkleAppendTree {
         }
     }
 
+    pub fn revert_to_next_index(&mut self, target_next_index: u64, changed_left_next_siblings: &[Hash]) -> QDogeResult<()> {
+        if self.next_index == 0 || target_next_index >= self.next_index {
+             return Err(DogeBridgeError::RevertIndexTooHigh);
+        }
+        if target_next_index == 0 {
+            self.next_siblings = core::array::from_fn(|i| SHA256_ZERO_HASHES[i]);
+            self.current_root = SHA256_ZERO_HASHES[TREE_HEIGHT];
+            self.next_index = 0;
+            return Ok(());
+        }
+        let changed_count = changed_left_next_siblings.len();
+        let mut changed_idx = 0;
+        let mut changed_index = target_next_index ^ self.next_index;
+        for i in 0..32 {
+            if changed_index == 0 {
+                break;
+            }
+            let is_right_child = target_next_index & (1 << i) != 0;
+            if is_right_child {
+                // Right child: Sibling is stored Left.
+                if changed_idx >= changed_count {
+                    return Err(DogeBridgeError::NotEnoughChangedLeftSiblings);
+                }
+                self.next_siblings[i] = changed_left_next_siblings[changed_idx];
+                changed_idx += 1;
+            } else {
+                // Left child: Sibling is Zero.
+                self.next_siblings[i] = SHA256_ZERO_HASHES[i];
+            }
+            changed_index >>= 1;
+        }
+
+        if changed_idx != changed_count {
+            //return Err(DogeBridgeError::TooManyChangedLeftSiblings);
+        }
+
+        let root = hash_impl_sha256_compute_merkle_root(&[0u8; 32], target_next_index, &self.next_siblings);
+        self.current_root = root;
+        self.next_index = target_next_index;
+        Ok(())
+        
+
+
+    }
     /// Reverts the tree to `index`.
     /// `value` is the leaf at `index - 1`.
     /// `changed_left_siblings` are the left siblings required when the path from `index - 1` includes Right children.

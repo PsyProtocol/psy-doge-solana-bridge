@@ -7,7 +7,7 @@ use solana_sdk::{program_pack::Pack, signature::Signer};
 use psy_doge_solana_core::{
     instructions::doge_bridge::InitializeBridgeParams, program_state::{PsyBridgeConfig, PsyReturnTxOutput}
 };
-use psy_bridge_core::{crypto::hash::sha256::btc_hash256_bytes, header::{PsyBridgeHeader, PsyBridgeStateCommitment, PsyBridgeTipStateCommitment}};
+use psy_bridge_core::{crypto::hash::sha256::btc_hash256_bytes, custodian_config::BridgeCustodianWalletConfig, header::{PsyBridgeHeader, PsyBridgeStateCommitment, PsyBridgeTipStateCommitment}};
 use doge_bridge::state::BridgeState;
 
 #[tokio::test]
@@ -26,6 +26,7 @@ async fn test_bridge_extended_flow() {
         bridge_header: PsyBridgeHeader{ tip_state: PsyBridgeTipStateCommitment::default(), finalized_state: PsyBridgeStateCommitment::default(), bridge_state_hash: [0u8; 32], last_rollback_at_secs: 0, paused_until_secs: 0, total_finalized_fees_collected_chain_history: 0 },
         start_return_txo_output: PsyReturnTxOutput { sighash: [0u8; 32], output_index: 0, amount_sats: 0 },
         config_params,
+        custodian_wallet_config: BridgeCustodianWalletConfig { wallet_address_hash: [1u8; 20], network_type: 0 },
     };
     
     // Initialize Bridge
