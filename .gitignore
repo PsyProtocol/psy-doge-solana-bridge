@@ -20,6 +20,7 @@ local_checkpoints/
 logs/
 test-ledger/
 index.scip
+keys/
 
 **/.coordinator_edge_repl_history
 **/.realm_edge_repl_history
