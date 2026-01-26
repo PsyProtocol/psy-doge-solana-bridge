@@ -1,11 +1,15 @@
-
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
+pub struct FeeResult {
+    pub fees_generated: u64,
+    pub amount_after_fees: u64,
+}
 
 pub fn calcuate_deposit_fee(
     total_deposit_amount: u64,
     flat_fee_per_deposit_sats: u64,
     deposit_fee_rate_numerator: u64,
     deposit_fee_rate_denominator: u64,
-) -> anyhow::Result<(u64, u64)> {
+) -> anyhow::Result<FeeResult> {
     // Use u128 to avoid floating point precision issues
     let fees_generated = (total_deposit_amount as u128)
         .checked_mul(deposit_fee_rate_numerator as u128)
@@ -15,53 +19,59 @@ pub fn calcuate_deposit_fee(
         .checked_add(flat_fee_per_deposit_sats as u128)
         .ok_or_else(|| anyhow::anyhow!("Fee calculation overflow"))? as u64;
 
-    Ok((
+    Ok(FeeResult{
         fees_generated,
-        total_deposit_amount
+        amount_after_fees: total_deposit_amount
             .checked_sub(fees_generated)
             .ok_or_else(|| anyhow::anyhow!("Fee calculation underflow"))?,
-    ))
+    })
 }
 
 
 pub fn calcuate_withdrawal_fee(
-    total_deposit_amount: u64,
-    flat_fee_per_deposit_sats: u64,
-    deposit_fee_rate_numerator: u64,
-    deposit_fee_rate_denominator: u64,
-) -> anyhow::Result<(u64, u64)> {
+    total_withdrawal_amount: u64,
+    flat_fee_per_withdrawal_sats: u64,
+    withdrawal_fee_rate_numerator: u64,
+    withdrawal_fee_rate_denominator: u64,
+) -> anyhow::Result<FeeResult> {
     // Use u128 to avoid floating point precision issues
-    let fees_generated = (total_deposit_amount as u128)
-        .checked_mul(deposit_fee_rate_numerator as u128)
+    let fees_generated = (total_withdrawal_amount as u128)
+        .checked_mul(withdrawal_fee_rate_numerator as u128)
         .ok_or_else(|| anyhow::anyhow!("Fee calculation overflow"))?
-        .checked_div(deposit_fee_rate_denominator as u128)
+        .checked_div(withdrawal_fee_rate_denominator as u128)
         .ok_or_else(|| anyhow::anyhow!("Division by zero in fee calculation"))?
-        .checked_add(flat_fee_per_deposit_sats as u128)
+        .checked_add(flat_fee_per_withdrawal_sats as u128)
         .ok_or_else(|| anyhow::anyhow!("Fee calculation overflow"))? as u64;
 
-    Ok((
+    
+    Ok(FeeResult{
         fees_generated,
-        total_deposit_amount
+        amount_after_fees: total_withdrawal_amount
             .checked_sub(fees_generated)
             .ok_or_else(|| anyhow::anyhow!("Fee calculation underflow"))?,
-    ))
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::calcuate_deposit_fee as calcuate_fee;
+    use super::{calcuate_deposit_fee as calcuate_fee, FeeResult};
     use proptest::prelude::*;
     pub fn calcuate_fee_float_implementation(
         total_deposit_amount: u64,
         flat_fee_per_deposit_sats: u64,
         deposit_fee_rate_numerator: u64,
         deposit_fee_rate_denominator: u64,
-    ) -> anyhow::Result<(u64, u64)> {
+    ) -> anyhow::Result<FeeResult> {
         let deposit_fee_rate = (deposit_fee_rate_numerator as f64)
             / (deposit_fee_rate_denominator as f64);
         let fees_generated = (total_deposit_amount as f64 * deposit_fee_rate).floor() as u64 + flat_fee_per_deposit_sats;
             
-        Ok((fees_generated, total_deposit_amount.checked_sub(fees_generated).ok_or_else(|| anyhow::anyhow!("Fee calculation underflow"))?))
+        Ok(FeeResult{
+            fees_generated,
+            amount_after_fees: total_deposit_amount
+                .checked_sub(fees_generated)
+                .ok_or_else(|| anyhow::anyhow!("Fee calculation underflow"))?,
+        })
     }
     // A helper function to compare the results of the two functions
     fn assert_parity(
@@ -158,8 +168,8 @@ mod tests {
             );
             // We expect the results to be very close, but floating point arithmetic
             // can have small precision errors. A difference of 1 should be acceptable.
-            let float_fee = float_result.unwrap().0;
-            let u128_fee = u128_result.unwrap().0;
+            let float_fee = float_result.unwrap().fees_generated;
+            let u128_fee = u128_result.unwrap().fees_generated;
             assert!((float_fee as i64 - u128_fee as i64).abs() <= 10000, "Discrepancy too large: float_fee = {}, u128_fee = {}", float_fee, u128_fee);
         }
     }

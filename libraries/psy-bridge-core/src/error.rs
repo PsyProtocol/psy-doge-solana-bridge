@@ -299,6 +299,9 @@ pub enum DogeBridgeError {
 
     #[error("Cannot unlock pending mint buffer after auto advancing pending mint state")]
     CannotUnlockAfterAutoAdvance = 951,
+
+    #[error("Invalid Doge transaction hash")]
+    InvalidDogeTxHash = 952,
 }
 #[cfg(feature = "solprogram")]
 impl solana_program_error::ToStr for DogeBridgeError {
@@ -430,6 +433,7 @@ impl solana_program_error::ToStr for DogeBridgeError {
             DogeBridgeError::InvalidMintBufferPDA => "Invalid mint buffer PDA",
             DogeBridgeError::InvalidTxoBufferPDA => "Invalid txo buffer PDA",
             DogeBridgeError::CannotUnlockAfterAutoAdvance => "Cannot unlock pending mint buffer after auto advancing pending mint state",
+            DogeBridgeError::InvalidDogeTxHash => "Invalid Doge transaction hash",
         }
     }
 }

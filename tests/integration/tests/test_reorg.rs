@@ -3,8 +3,7 @@ use doge_bridge_test_utils::{
     block_transition_helper::{BTAutoClaimedDeposit, BlockTransitionHelper},
     BridgeTestContext,
 };
-use psy_bridge_core::
-    header::{PsyBridgeHeader, PsyBridgeStateCommitment}
+use psy_bridge_core::header::{PsyBridgeHeader, PsyBridgeStateCommitment, PsyBridgeTipStateCommitment}
 ;
 use psy_doge_solana_core::{
     instructions::doge_bridge::InitializeBridgeParams,
@@ -15,7 +14,7 @@ use solana_sdk::{program_pack::Pack, signature::Signer};
 
 #[tokio::test]
 async fn test_reorg_with_fast_forward() {
-    let mut ctx = BridgeTestContext::new().await;
+    let ctx = BridgeTestContext::new().await;
 
     let config_params = PsyBridgeConfig {
         deposit_fee_rate_numerator: 2,
@@ -27,13 +26,16 @@ async fn test_reorg_with_fast_forward() {
     };
     let initialize_params = InitializeBridgeParams {
         bridge_header: PsyBridgeHeader {
-            tip_state: PsyBridgeStateCommitment::default(),
+            tip_state: PsyBridgeTipStateCommitment::default(),
             finalized_state: PsyBridgeStateCommitment::default(),
             bridge_state_hash: [0u8; 32],
             last_rollback_at_secs: 0,
             paused_until_secs: 0,
+            
+            
             total_finalized_fees_collected_chain_history: 0,
         },
+        custodian_wallet_config_hash: [1u8; 32],
         start_return_txo_output: PsyReturnTxOutput {
             sighash: [0u8; 32],
             output_index: 0,

@@ -3,7 +3,6 @@ use solana_program::{
     account_info::{AccountInfo, next_account_info}, declare_id, entrypoint::ProgramResult, msg, program::invoke, program::invoke_signed, program_error::ProgramError, pubkey::Pubkey, rent::Rent, system_instruction, sysvar::Sysvar
 };
 
-// ... (Structs unchanged) ...
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct PendingMintsTxoBufferHeader {
@@ -16,7 +15,6 @@ pub struct PendingMintsTxoBufferHeader {
 }
 const HEADER_SIZE: usize = std::mem::size_of::<PendingMintsTxoBufferHeader>();
 
-// ... (Helpers unchanged) ...
 pub fn realloc_account<'a>(
     account: &AccountInfo<'a>,
     payer: &AccountInfo<'a>,
@@ -206,4 +204,4 @@ pub fn process_instruction(
     Ok(())
 }
 
-declare_id!("TxoBuffer1111111111111111111111111111111111"); 
+declare_id!("TXWhjswto9q6hfaGPuAhDS79wAHKfbMJLVR178xYAaQ"); 

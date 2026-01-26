@@ -18,4 +18,4 @@ fn process_instruction(
     processor::process_instruction(program_id, accounts, instruction_data)
 }
 
-solana_program::declare_id!("DogeBridgeManua1C1a1m1111111111111111111111"); 
+solana_program::declare_id!("MCdYbqiK3uj36tohbMjsh3Ssg8iRSJmSHToNxW8TWWE"); 

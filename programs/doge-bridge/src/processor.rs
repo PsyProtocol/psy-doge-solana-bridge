@@ -21,18 +21,13 @@ use psy_doge_solana_core::generic_cpi::{
     UnlockAutoClaimMintBufferCPIHelper,
 };
 use psy_doge_solana_core::instructions::doge_bridge::{
-    BlockUpdateFixedData, InitializeBridgeInstructionData, ProcessManualDepositInstructionData,
-    ProcessWithdrawalInstructionData, RequestWithdrawalInstructionData,
-    DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE, DOGE_BRIDGE_INSTRUCTION_INITIALIZE,
-    DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES, DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT,
-    DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP, DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL,
-    DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL,
+    BlockUpdateFixedData, DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE, DOGE_BRIDGE_INSTRUCTION_INITIALIZE, DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES, DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP, DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS, InitializeBridgeInstructionData, ProcessManualDepositInstructionData, ProcessWithdrawalInstructionData, RequestWithdrawalInstructionData
 };
 use psy_doge_solana_core::instructions::doge_bridge::{
     DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE,
     DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS,
 };
-use psy_doge_solana_core::program_state::{FinalizedBlockMintTxoInfo, PsyReturnTxOutput};
+use psy_doge_solana_core::program_state::{FinalizedBlockMintTxoInfo, PsyReturnTxOutput, PsyWithdrawalRequest};
 use solana_program::instruction::{AccountMeta, Instruction};
 use solana_program::program_error::ProgramError;
 use solana_program::{
@@ -136,8 +131,6 @@ pub fn process_instruction(
                 program_id,
                 accounts,
                 params.request,
-                params.recipient_address,
-                params.address_type,
             )
         }
         DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL => {
@@ -208,6 +201,9 @@ pub fn process_instruction(
                 txo_buffer_pda_bump,
                 should_unlock,
             )
+        }
+        DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS => {
+            process_snapshot_withdrawals(program_id, accounts)
         }
         _ => Err(BridgeError::SerializationError.into()),
     }
@@ -427,7 +423,18 @@ fn run_block_update_common(
                 &mint_buffer_data,
             );
         if res.is_err() {
-            msg!("Error during single block transition: {:?}", res.err());
+
+        let previous_header_hash = bridge_state.core_state.bridge_header.get_hash_canonical();
+        let new_header_hash = new_header.get_hash_canonical();
+        let expected_zkp_public_inputs = psy_doge_solana_core::public_inputs::get_block_transition_public_inputs(
+            &previous_header_hash,
+            &new_header_hash,
+            &bridge_state
+            .core_state.config_params.get_hash(),
+            &bridge_state
+            .core_state.custodian_wallet_config_hash,
+        );
+            msg!("SBT_ERROR: {:?}, EP:{:?}", res.err(), expected_zkp_public_inputs);
             return Err(res.err().unwrap().into());
         }
     }
@@ -706,9 +713,7 @@ fn process_process_mint_group_auto_advance(
 fn process_request_withdrawal(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],
-    request: psy_doge_solana_core::program_state::PsyWithdrawalRequest,
-    recipient_address: [u8; 20],
-    address_type: u32,
+    request: PsyWithdrawalRequest,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let bridge_state_account = next_account_info(account_info_iter)?;
@@ -727,14 +732,10 @@ fn process_request_withdrawal(
         authority: user_authority,
         token_program,
     };
-
     bridge_state.core_state.request_withdrawal(
         &burner,
         &user_authority.key.to_bytes(),
         &request,
-        recipient_address,
-        address_type,
-        request.amount_sats,
     )?;
 
     Ok(())
@@ -808,6 +809,25 @@ fn send_wormhole_vaa<'a>(
         ],
         &[emitter_seeds],
     )?;
+
+    #[cfg(feature = "noopshim")]
+    invoke_signed(
+        &instruction,
+        &[
+            bridge_config.clone(),
+            message.clone(),
+            emitter.clone(),
+            sequence.clone(),
+            payer.clone(),
+            fee_collector.clone(),
+            clock.clone(),
+            system_program.clone(),
+            core_bridge_program.clone(),
+            event_authority.clone(),
+        ],
+        &[emitter_seeds],
+    )?;
+
     msg!("Wormhole VAA sent via CPI: {}, seeds: {:?}", instruction.data.len(), emitter_seeds);
 
     Ok(())
@@ -877,7 +897,6 @@ fn process_process_withdrawal(
             new_spent_txo_tree_root,
             new_next_processed_withdrawals_index,
         )?;
-    msg!("requesting_sighash: {:?}", sighash);
 
     let nonce = (bridge_state.core_state.next_processed_withdrawals_index & 0xFFFFFFFF) as u32;
     
@@ -897,7 +916,7 @@ fn process_process_withdrawal(
         event_authority,
         seeds,
         &sighash,
-        &dogecoin_tx,
+        &tx_data,
     )?;
 
     Ok(())
@@ -988,7 +1007,7 @@ fn process_process_manual_deposit(
             recent_block_merkle_tree_root,
             recent_auto_claim_txo_root,
             combined_txo_index,
-            &depositor_solana_public_key,
+            &recipient_account.key.to_bytes(),
             deposit_amount_sats,
         )?
     };
@@ -1006,7 +1025,7 @@ fn process_process_manual_deposit(
         token_program,
     };
 
-    minter.mint_to(0, &depositor_solana_public_key, mint_amount)?;
+    minter.mint_to(0, &recipient_account.key.to_bytes(), mint_amount)?;
 
     Ok(())
 }
@@ -1111,5 +1130,36 @@ fn process_replay_withdrawal(
         return Err(BridgeError::CoreError.into());
     }
 
+    Ok(())
+}
+
+fn process_snapshot_withdrawals(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+
+    let bridge_state_account = next_account_info(account_info_iter)?;
+    let operator = next_account_info(account_info_iter)?;
+    let _payer = next_account_info(account_info_iter)?;
+
+    if !operator.is_signer {
+        return Err(solana_program::program_error::ProgramError::MissingRequiredSignature);
+    }
+    let (bridge_pda, _bump) = Pubkey::find_program_address(&[b"bridge_state"], program_id);
+    if bridge_pda != *bridge_state_account.key {
+        return Err(BridgeError::InvalidPDA.into());
+    } 
+
+    let mut data = bridge_state_account.try_borrow_mut_data()?;
+    let bridge_state = bytemuck::try_from_bytes_mut::<BridgeState>(&mut data)
+        .map_err(|_| BridgeError::SerializationError)?;
+    let current_timestamp = (Clock::get()?.unix_timestamp & 0xFFFFFFFFi64) as u32;
+    if bridge_state.core_state.access_control.operator_pubkey != operator.key.to_bytes() {
+        return Err(solana_program::program_error::ProgramError::MissingRequiredSignature);
+    }
+    bridge_state.core_state.snapshot_for_withdrawal(
+        current_timestamp,
+    );
     Ok(())
 }

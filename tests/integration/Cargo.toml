@@ -17,3 +17,5 @@ spl-associated-token-account = { workspace = true }
 doge-bridge = { path = "../../programs/doge-bridge", features = ["no-entrypoint"], default-features = false }
 bytemuck = { workspace = true }
 anyhow = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

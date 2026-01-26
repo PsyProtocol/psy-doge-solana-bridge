@@ -29,6 +29,7 @@ impl UserManualDepositManagerProgramState {
         recent_block_merkle_tree_root: QHash256,
         recent_auto_claim_txo_root: QHash256,
         new_manual_claim_txo_root: QHash256,
+        custodian_wallet_config_hash: QHash256,
         tx_hash: QHash256,
         combined_txo_index: u64,
         signer_public_key: [u8; 32],
@@ -46,6 +47,7 @@ impl UserManualDepositManagerProgramState {
             &new_manual_claim_txo_root,
             &tx_hash,
             &token_pda,
+            &custodian_wallet_config_hash,
             combined_txo_index,
             deposit_amount_sats,
         );

@@ -19,7 +19,7 @@ use sha2_v0_10_9::Sha256;
 
 use crate::common_types::QHash256;
 
-#[cfg(all(any(feature = "sha2", feature= "sp1"), not(feature = "solprogram")))]
+#[cfg(any(test, all(any(feature = "sha2", feature= "sp1"), not(feature = "solprogram"))))]
 #[inline]
 pub fn hash_impl_sha256_bytes(bytes: &[u8]) -> QHash256 {
     let mut hasher = Sha256::new();
@@ -39,7 +39,7 @@ pub fn hash_impl_sha256_bytes(bytes: &[u8]) -> QHash256 {
     solana_program::hash::hash(bytes).to_bytes()
 }
 
-#[cfg(all(any(feature = "sha2", feature= "sp1"), not(feature = "solprogram")))]
+#[cfg(any(test, all(any(feature = "sha2", feature= "sp1"), not(feature = "solprogram"))))]
 #[inline]
 pub fn hashv_impl_sha256_bytes(bytes_vec: &[&[u8]]) -> QHash256 {
     let mut hasher = Sha256::new();

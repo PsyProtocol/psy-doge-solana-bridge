@@ -58,7 +58,7 @@ impl Clone for TestBridgeClient {
     }
 }
 impl TestBridgeClient {
-    pub async fn send_tx(&mut self, ixs: &[Instruction], extra_signers: &[&Keypair]) {
+    pub async fn send_tx(&self, ixs: &[Instruction], extra_signers: &[&Keypair]) {
         let recent_blockhash = self.client.get_latest_blockhash().await.unwrap();
         let mut signers = vec![&self.payer];
         signers.extend_from_slice(extra_signers);
@@ -104,27 +104,27 @@ impl TestBridgeClient {
     }
 
     pub async fn create_pending_mint_buffer(&mut self, locker: Pubkey, mints: &[PendingMint]) -> Pubkey {
-        let payer_pubkey = self.payer.pubkey().to_bytes();
+        let operator_pubkey = self.operator.pubkey().to_bytes();
         let seeds: &[&[u8]] = &[
             b"mint_buffer",
-            &payer_pubkey,
+            &operator_pubkey,
         ];
         let (buffer_pubkey, _) = Pubkey::find_program_address(seeds, &self.pending_mint_program_id);
-        
+
         let account_info = self.client.get_account(buffer_pubkey).await.unwrap();
-        
+
         if account_info.is_none() {
             let space = 72;
             let rent = self.client.get_rent().await.unwrap();
             let min_bal = rent.minimum_balance(space);
             let transfer_ix = system_instruction::transfer(&self.payer.pubkey(), &buffer_pubkey, min_bal);
-            let setup_ix = instructions::pending_mint_setup(self.pending_mint_program_id, buffer_pubkey, locker, self.payer.pubkey());
+            let setup_ix = instructions::pending_mint_setup(self.pending_mint_program_id, buffer_pubkey, locker, self.operator.pubkey());
             self.send_tx(&[transfer_ix, setup_ix], &[]).await;
         }
 
         let total_mints = mints.len() as u16;
-        let reinit_ix = instructions::pending_mint_reinit(self.pending_mint_program_id, buffer_pubkey, self.payer.pubkey(), total_mints);
-        self.send_tx(&[reinit_ix], &[]).await;
+        let reinit_ix = instructions::pending_mint_reinit(self.pending_mint_program_id, buffer_pubkey, self.operator.pubkey(), total_mints);
+        self.send_tx(&[reinit_ix], &[&self.operator]).await;
 
         let groups_count = (mints.len() + PM_MAX_PENDING_MINTS_PER_GROUP - 1) / PM_MAX_PENDING_MINTS_PER_GROUP;
         for group_idx in 0..groups_count {
@@ -133,8 +133,8 @@ impl TestBridgeClient {
             let group_mints = &mints[start..end];
             let mut mint_data = Vec::with_capacity(group_mints.len() * PENDING_MINT_SIZE);
             for m in group_mints { mint_data.extend_from_slice(bytemuck::bytes_of(m)); }
-            let insert_ix = instructions::pending_mint_insert(self.pending_mint_program_id, buffer_pubkey, self.payer.pubkey(), group_idx as u16, &mint_data);
-            self.send_tx(&[insert_ix], &[]).await;
+            let insert_ix = instructions::pending_mint_insert(self.pending_mint_program_id, buffer_pubkey, self.operator.pubkey(), group_idx as u16, &mint_data);
+            self.send_tx(&[insert_ix], &[&self.operator]).await;
         }
         println!("total_pending_mints: {}", mints.len());
         let account = self.client.get_account(buffer_pubkey).await.unwrap().unwrap();
@@ -143,13 +143,13 @@ impl TestBridgeClient {
     }
 
     pub async fn create_txo_buffer(&mut self, doge_block_height: u32, txo_indices: &[u32], batch_id: u32) -> Pubkey {
-        let payer_pubkey = self.payer.pubkey().to_bytes();
+        let operator_pubkey = self.operator.pubkey().to_bytes();
         let seeds: &[&[u8]] = &[
             b"txo_buffer",
-            &payer_pubkey,
+            &operator_pubkey,
         ];
         let (buffer_pubkey, _) = Pubkey::find_program_address(seeds, &self.txo_buffer_program_id);
-        
+
         let account_info = self.client.get_account(buffer_pubkey).await.unwrap();
 
         if account_info.is_none() {
@@ -157,24 +157,44 @@ impl TestBridgeClient {
             let rent = self.client.get_rent().await.unwrap();
             let min_bal = rent.minimum_balance(space);
             let transfer_ix = system_instruction::transfer(&self.payer.pubkey(), &buffer_pubkey, min_bal);
-            let init_ix = instructions::txo_buffer_init(self.txo_buffer_program_id, buffer_pubkey, self.payer.pubkey());
+            let init_ix = instructions::txo_buffer_init(self.txo_buffer_program_id, buffer_pubkey, self.operator.pubkey());
             self.send_tx(&[transfer_ix, init_ix], &[]).await;
         }
-        
+
         let txo_bytes: Vec<u8> = txo_indices.iter().flat_map(|x| x.to_le_bytes()).collect();
         let total_len = txo_bytes.len() as u32;
 
-        let set_len_ix = instructions::txo_buffer_set_len(self.txo_buffer_program_id, buffer_pubkey, self.payer.pubkey(), self.payer.pubkey(), total_len, true, batch_id, doge_block_height, false);
-        self.send_tx(&[set_len_ix], &[]).await;
+        let set_len_ix = instructions::txo_buffer_set_len(self.txo_buffer_program_id, buffer_pubkey, self.payer.pubkey(), self.operator.pubkey(), total_len, true, batch_id, doge_block_height, false);
+        self.send_tx(&[set_len_ix], &[&self.operator]).await;
 
         for (i, chunk) in txo_bytes.chunks(CHUNK_SIZE).enumerate() {
             let offset = (i * CHUNK_SIZE) as u32;
-            let write_ix = instructions::txo_buffer_write(self.txo_buffer_program_id, buffer_pubkey, self.payer.pubkey(), batch_id, offset, chunk);
-            self.send_tx(&[write_ix], &[]).await;
+            let write_ix = instructions::txo_buffer_write(self.txo_buffer_program_id, buffer_pubkey, self.operator.pubkey(), batch_id, offset, chunk);
+            self.send_tx(&[write_ix], &[&self.operator]).await;
         }
 
-        let finalize_ix = instructions::txo_buffer_set_len(self.txo_buffer_program_id, buffer_pubkey, self.payer.pubkey(), self.payer.pubkey(), total_len, false, batch_id, doge_block_height, true);
-        self.send_tx(&[finalize_ix], &[]).await;
+        let finalize_ix = instructions::txo_buffer_set_len(self.txo_buffer_program_id, buffer_pubkey, self.payer.pubkey(), self.operator.pubkey(), total_len, false, batch_id, doge_block_height, true);
+        self.send_tx(&[finalize_ix], &[&self.operator]).await;
+        buffer_pubkey
+    }
+
+    /// Get mint buffer PDA (derived from operator key)
+    pub fn get_mint_buffer_pda(&self) -> Pubkey {
+        let operator_pubkey = self.operator.pubkey().to_bytes();
+        let (buffer_pubkey, _) = Pubkey::find_program_address(
+            &[b"mint_buffer", &operator_pubkey],
+            &self.pending_mint_program_id,
+        );
+        buffer_pubkey
+    }
+
+    /// Get TXO buffer PDA (derived from operator key)
+    pub fn get_txo_buffer_pda(&self) -> Pubkey {
+        let operator_pubkey = self.operator.pubkey().to_bytes();
+        let (buffer_pubkey, _) = Pubkey::find_program_address(
+            &[b"txo_buffer", &operator_pubkey],
+            &self.txo_buffer_program_id,
+        );
         buffer_pubkey
     }
 }

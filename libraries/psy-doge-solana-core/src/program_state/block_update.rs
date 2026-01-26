@@ -184,7 +184,7 @@ impl PsyBridgeProgramState {
             &previous_header_hash,
             &new_header_hash,
             &self.config_params.get_hash(),
-            &self.bridge_doge_public_key_hash,
+            &self.custodian_wallet_config_hash,
         );
 
         let is_zkp_valid =
@@ -211,8 +211,8 @@ impl PsyBridgeProgramState {
             let txo_header = bytemuck::from_bytes::<PendingMintsTxoBufferHeader>(
                 &auto_claim_txo_buffer_data_account_memory[0..PM_TXO_BUFFER_HEADER_SIZE],
             );
-            if txo_header.doge_block_height != new_header.finalized_state.block_height {
-                // make sure it is tagged with the correct block height
+            if txo_header.doge_block_height != new_header.finalized_state.block_height || txo_header.data_size == 0 {
+                // make sure it is tagged with the correct block height if there are any new mints
                 return Err(DogeBridgeError::InvalidAutoClaimTxoBufferPendingMintsCount);
             }
 
@@ -307,7 +307,7 @@ impl PsyBridgeProgramState {
             &new_header_hash,
             extra_finalized_blocks,
             &self.config_params.get_hash(),
-            &self.bridge_doge_public_key_hash,
+            &self.custodian_wallet_config_hash,
         );
         let is_zkp_valid =
             ZKVerifier::verify_compact_zkp_slice(proof, vk, &expected_zkp_public_inputs);

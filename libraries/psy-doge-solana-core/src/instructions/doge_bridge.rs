@@ -13,15 +13,16 @@ pub const DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL: u8 = 6;
 pub const DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP: u8 = 7;
 pub const DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS: u8 = 8;
 pub const DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE: u8 = 9;
+pub const DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS: u8 = 10;
 
 #[macro_rules_attribute::apply(crate::DeriveCopySerializeDefaultReprC)]
 pub struct InitializeBridgeParams {
     pub bridge_header: PsyBridgeHeader,
     pub start_return_txo_output: PsyReturnTxOutput,
     pub config_params: PsyBridgeConfig,
+    pub custodian_wallet_config_hash: QHash256,
 }
 
-// 0. Initialize
 #[macro_rules_attribute::apply(crate::DeriveCopySerializeDefaultReprC)]
 pub struct InitializeBridgeInstructionData {
     pub operator_pubkey: [u8; 32],
@@ -30,6 +31,16 @@ pub struct InitializeBridgeInstructionData {
     pub bridge_header: PsyBridgeHeader,
     pub start_return_txo_output: PsyReturnTxOutput,
     pub config_params: PsyBridgeConfig,
+    pub custodian_wallet_config_hash: QHash256,
+}
+
+
+#[macro_rules_attribute::apply(crate::DeriveCopySerializeDefaultReprC)]
+pub struct InitializeBridgeInstructionDataDoge {
+    pub bridge_header: PsyBridgeHeader,
+    pub start_return_txo_output: PsyReturnTxOutput,
+    pub config_params: PsyBridgeConfig,
+    pub custodian_wallet_config_hash: QHash256,
 }
 
 #[macro_rules_attribute::apply(crate::DeriveCopySerializeReprC)]
@@ -50,8 +61,6 @@ impl Default for BlockUpdateFixedData {
 #[macro_rules_attribute::apply(crate::DeriveCopySerializeDefaultReprC)]
 pub struct RequestWithdrawalInstructionData {
     pub request: PsyWithdrawalRequest,
-    pub recipient_address: [u8; 20],
-    pub address_type: u32,
 }
 
 #[macro_rules_attribute::apply(crate::DeriveCopySerializeReprC)]

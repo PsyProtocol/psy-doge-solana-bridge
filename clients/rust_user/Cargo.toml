@@ -1,0 +1,51 @@
+[package]
+name = "doge-bridge-user-client"
+version = "0.1.0"
+edition = "2021"
+description = "User-focused Rust client for the Doge Bridge on Solana"
+
+[dependencies]
+# Solana dependencies
+solana-sdk = { workspace = true }
+solana-client = { workspace = true }
+solana-program = { workspace = true }
+spl-token = { workspace = true }
+spl-associated-token-account = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = "0.1"
+
+# Error handling
+thiserror = { workspace = true }
+
+# Serialization
+bytemuck = { workspace = true }
+
+# Solana transaction status
+solana-transaction-status = "=2.2.1"
+
+# Local libraries
+psy-doge-solana-core = { path = "../../libraries/psy-doge-solana-core", features = ["std", "serialize_bytemuck", "sha2"], default-features = false }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+bs58 = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+[[example]]
+name = "create_token_account"
+path = "examples/create_token_account.rs"
+
+[[example]]
+name = "transfer"
+path = "examples/transfer.rs"
+
+[[example]]
+name = "withdraw_to_doge"
+path = "examples/withdraw_to_doge.rs"
+
+[[example]]
+name = "set_close_authority_null"
+path = "examples/set_close_authority_null.rs"

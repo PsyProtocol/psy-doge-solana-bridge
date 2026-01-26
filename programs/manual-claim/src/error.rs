@@ -10,6 +10,8 @@ pub enum ManualClaimError {
     SerializationError,
     #[error("Invalid PDA")]
     InvalidPDA,
+    #[error("Invalid Recipient ATA")]
+    InvalidRecipientATA,
 }
 
 impl From<ManualClaimError> for ProgramError {

@@ -1,33 +1,51 @@
-import { PublicKey, TransactionInstruction, SystemProgram, AccountMeta } from "@solana/web3.js";
+/**
+ * Instruction builders for the Doge Bridge program.
+ */
+
+import { PublicKey, TransactionInstruction, SystemProgram, AccountMeta, SYSVAR_CLOCK_PUBKEY } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
-  INITIALIZE_BRIDGE_INSTRUCTION_DATA_SIZE,
-  encodeInitializeBridgeInstructionData,
-  InitializeBridgeInstructionData,
+  DOGE_BRIDGE_PROGRAM_ID,
+  PENDING_MINT_BUFFER_BUILDER_PROGRAM_ID,
+  TXO_BUFFER_BUILDER_PROGRAM_ID,
+  DOGE_BRIDGE_INSTRUCTION_INITIALIZE,
+  DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE,
+  DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL,
+  DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL,
+  DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES,
+  DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT,
+  DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL,
+  DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP,
+  DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS,
+  DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE,
+  DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS,
+  MC_MANUAL_CLAIM_TRANSACTION_DISCRIMINATOR,
+  BRIDGE_STATE_SEED,
+  MANUAL_CLAIM_SEED,
+} from "./constants";
+import {
   PsyBridgeHeader,
-  encodePsyBridgeHeader,
-  PSY_BRIDGE_HEADER_SIZE,
-  FinalizedBlockMintTxoInfo,
-  FINALIZED_BLOCK_MINT_TXO_INFO_SIZE,
-  encodeFinalizedBlockMintTxoInfo,
   PsyReturnTxOutput,
-  encodePsyReturnTxOutput,
+  PsyBridgeConfig,
+  BridgeCustodianWalletConfig,
+  FinalizedBlockMintTxoInfo,
+  InitializeBridgeParams,
+  CompactBridgeZKProof,
+  PSY_BRIDGE_HEADER_SIZE,
+  FINALIZED_BLOCK_MINT_TXO_INFO_SIZE,
   PSY_RETURN_TX_OUTPUT_SIZE,
   MANUAL_CLAIM_INSTRUCTION_DATA_SIZE,
-  encodeManualClaimInstructionData
-} from "./layout";
+  encodePsyBridgeHeader,
+  encodePsyReturnTxOutput,
+  encodePsyBridgeConfig,
+  encodeCustodianWalletConfig,
+  encodeFinalizedBlockMintTxoInfo,
+  encodeManualClaimInstructionData,
+} from "./types";
 
-const DOGE_BRIDGE_INSTRUCTION_INITIALIZE = 0;
-const DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE = 1;
-const DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL = 2;
-const DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL = 3;
-const DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES = 4;
-const DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT = 5;
-const DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP = 7;
-const DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS = 8;
-const DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE = 9;
-
-const MANUAL_CLAIM_INSTRUCTION_CLAIM = 0;
+// =============================================================================
+// Helpers
+// =============================================================================
 
 function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   const totalLength = arrays.reduce((acc, curr) => acc + curr.length, 0);
@@ -56,30 +74,48 @@ function createInstructionHeader(instruction: number, bumps?: number[]): Uint8Ar
   return header;
 }
 
-export function createInitializeInstruction(
-  programId: PublicKey,
-  payer: PublicKey,
-  operator: PublicKey,
-  feeSpender: PublicKey,
-  dogeMint: PublicKey,
-  params: Omit<InitializeBridgeInstructionData, "operator_pubkey" | "fee_spender_pubkey" | "doge_mint">
-): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync(
-    [new TextEncoder().encode("bridge_state")],
+export function getBridgeStatePda(programId: PublicKey = DOGE_BRIDGE_PROGRAM_ID): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [new TextEncoder().encode(BRIDGE_STATE_SEED)],
     programId
   );
+}
 
-  const fields: InitializeBridgeInstructionData = {
-    operator_pubkey: operator,
-    fee_spender_pubkey: feeSpender,
-    doge_mint: dogeMint,
-    bridge_header: params.bridge_header,
-    start_return_txo_output: params.start_return_txo_output,
-    config_params: params.config_params,
-  };
+export function getManualClaimPda(
+  userPubkey: PublicKey,
+  manualClaimProgramId: PublicKey
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [new TextEncoder().encode(MANUAL_CLAIM_SEED), userPubkey.toBuffer()],
+    manualClaimProgramId
+  );
+}
 
-  const instructionData = new Uint8Array(INITIALIZE_BRIDGE_INSTRUCTION_DATA_SIZE);
-  encodeInitializeBridgeInstructionData(fields, instructionData);
+// =============================================================================
+// Bridge Instructions
+// =============================================================================
+
+export function initializeBridge(
+  payer: PublicKey,
+  operatorPubkey: PublicKey,
+  feeSpenderPubkey: PublicKey,
+  dogeMint: PublicKey,
+  params: InitializeBridgeParams,
+  programId: PublicKey = DOGE_BRIDGE_PROGRAM_ID
+): TransactionInstruction {
+  const [bridgeState] = getBridgeStatePda(programId);
+
+  const dataSize = 32 * 3 + PSY_BRIDGE_HEADER_SIZE + PSY_RETURN_TX_OUTPUT_SIZE + 48 + 32;
+  const instructionData = new Uint8Array(dataSize);
+  let offset = 0;
+
+  instructionData.set(operatorPubkey.toBuffer(), offset); offset += 32;
+  instructionData.set(feeSpenderPubkey.toBuffer(), offset); offset += 32;
+  instructionData.set(dogeMint.toBuffer(), offset); offset += 32;
+  offset += encodePsyBridgeHeader(params.bridgeHeader, instructionData, offset);
+  offset += encodePsyReturnTxOutput(params.startReturnTxoOutput, instructionData, offset);
+  offset += encodePsyBridgeConfig(params.configParams, instructionData, offset);
+  encodeCustodianWalletConfig(params.custodianWalletConfig, instructionData, offset);
 
   const header = createInstructionHeader(DOGE_BRIDGE_INSTRUCTION_INITIALIZE);
   const data = concatBytes(header, instructionData);
@@ -95,25 +131,21 @@ export function createInitializeInstruction(
   });
 }
 
-export function createBlockUpdateInstruction(
+export function blockUpdate(
   programId: PublicKey,
-  operator: PublicKey,
   payer: PublicKey,
-  proof: Uint8Array,
+  proof: CompactBridgeZKProof,
   header: PsyBridgeHeader,
+  operator: PublicKey,
   mintBuffer: PublicKey,
   txoBuffer: PublicKey,
   mintBufferBump: number,
   txoBufferBump: number,
-  pendingMintPid: PublicKey,
-  txoBufferPid: PublicKey,
+  pendingMintPid: PublicKey = PENDING_MINT_BUFFER_BUILDER_PROGRAM_ID,
+  txoBufferPid: PublicKey = TXO_BUFFER_BUILDER_PROGRAM_ID
 ): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync(
-    [new TextEncoder().encode("bridge_state")],
-    programId
-  );
+  const [bridgeState] = getBridgeStatePda(programId);
 
-  // CompactBridgeZKProof (256) + PsyBridgeHeader
   const dataSize = 256 + PSY_BRIDGE_HEADER_SIZE;
   const instructionData = new Uint8Array(dataSize);
   instructionData.set(proof, 0);
@@ -137,24 +169,21 @@ export function createBlockUpdateInstruction(
   });
 }
 
-export function createProcessReorgBlocksInstruction(
+export function processReorgBlocks(
   programId: PublicKey,
-  operator: PublicKey,
   payer: PublicKey,
-  proof: Uint8Array,
+  proof: CompactBridgeZKProof,
   header: PsyBridgeHeader,
   extraBlocks: FinalizedBlockMintTxoInfo[],
+  operator: PublicKey,
   mintBuffer: PublicKey,
   txoBuffer: PublicKey,
   mintBufferBump: number,
   txoBufferBump: number,
-  pendingMintPid: PublicKey,
-  txoBufferPid: PublicKey,
+  pendingMintPid: PublicKey = PENDING_MINT_BUFFER_BUILDER_PROGRAM_ID,
+  txoBufferPid: PublicKey = TXO_BUFFER_BUILDER_PROGRAM_ID
 ): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync(
-    [new TextEncoder().encode("bridge_state")],
-    programId
-  );
+  const [bridgeState] = getBridgeStatePda(programId);
 
   const fixedSize = 256 + PSY_BRIDGE_HEADER_SIZE;
   const extraBlocksSize = extraBlocks.length * FINALIZED_BLOCK_MINT_TXO_INFO_SIZE;
@@ -187,35 +216,30 @@ export function createProcessReorgBlocksInstruction(
   });
 }
 
-export function createRequestWithdrawalInstruction(
+export function requestWithdrawal(
   programId: PublicKey,
   userAuthority: PublicKey,
   mint: PublicKey,
   userTokenAccount: PublicKey,
-  recipientAddress: Uint8Array, // [u8; 20]
+  recipientAddress: Uint8Array,
   amountSats: bigint,
   addressType: number
 ): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync(
-    [new TextEncoder().encode("bridge_state")],
-    programId
-  );
+  const [bridgeState] = getBridgeStatePda(programId);
 
-  // Layout:
-  // recipient_address: 20
-  // address_type: 4
-  // amount_sats: 8
-  // arg_recipient: 20
-  // arg_type: 4
-  const dataSize = 20 + 4 + 8 + 20 + 4;
+  // RequestWithdrawalInstructionData layout:
+  // PsyWithdrawalRequest (32 bytes):
+  //   - amount_sats: u64 (8 bytes) at offset 0
+  //   - address_type: u32 (4 bytes) at offset 8
+  //   - recipient_address: [u8; 20] at offset 12
+  const dataSize = 32;
   const instructionData = new Uint8Array(dataSize);
   const view = new DataView(instructionData.buffer);
 
-  instructionData.set(recipientAddress, 0);
-  view.setUint32(20, addressType, true);
-  view.setBigUint64(24, amountSats, true);
-  instructionData.set(recipientAddress, 32);
-  view.setUint32(52, addressType, true);
+  // PsyWithdrawalRequest
+  view.setBigUint64(0, amountSats, true);
+  view.setUint32(8, addressType, true);
+  instructionData.set(recipientAddress, 12);
 
   const header = createInstructionHeader(DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL);
   const data = concatBytes(header, instructionData);
@@ -233,32 +257,35 @@ export function createRequestWithdrawalInstruction(
   });
 }
 
-export function createProcessWithdrawalInstruction(
+export function processWithdrawal(
   programId: PublicKey,
+  payer: PublicKey,
   genericBufferAccount: PublicKey,
-  proof: Uint8Array,
+  wormholeShimProgramId: PublicKey,
+  wormholeCoreProgramId: PublicKey,
+  proof: CompactBridgeZKProof,
   newReturnOutput: PsyReturnTxOutput,
   newSpentTxoTreeRoot: Uint8Array,
   newNextProcessedWithdrawalsIndex: bigint
 ): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync(
-    [new TextEncoder().encode("bridge_state")],
-    programId
-  );
+  const [bridgeState] = getBridgeStatePda(programId);
 
-  // Layout:
-  // Proof (256)
-  // ReturnOutput (48)
-  // SpentRoot (32)
-  // NextIndex (8)
+  // Derive Wormhole accounts
+  const [bridgeConfig] = PublicKey.findProgramAddressSync([Buffer.from("Bridge")], wormholeCoreProgramId);
+  const [feeCollector] = PublicKey.findProgramAddressSync([Buffer.from("fee_collector")], wormholeCoreProgramId);
+  const emitter = bridgeState;
+  const [sequence] = PublicKey.findProgramAddressSync([Buffer.from("Sequence"), emitter.toBuffer()], wormholeCoreProgramId);
+  const [message] = PublicKey.findProgramAddressSync([emitter.toBuffer()], wormholeShimProgramId);
+  const [eventAuthority] = PublicKey.findProgramAddressSync([Buffer.from("__event_authority")], wormholeShimProgramId);
+
   const dataSize = 256 + PSY_RETURN_TX_OUTPUT_SIZE + 32 + 8;
   const instructionData = new Uint8Array(dataSize);
-  
+
   let offset = 0;
   instructionData.set(proof, offset); offset += 256;
   offset += encodePsyReturnTxOutput(newReturnOutput, instructionData, offset);
   instructionData.set(newSpentTxoTreeRoot, offset); offset += 32;
-  new DataView(instructionData.buffer, instructionData.byteOffset + offset, 8).setBigUint64(0, newNextProcessedWithdrawalsIndex, true);
+  new DataView(instructionData.buffer, offset, 8).setBigUint64(0, newNextProcessedWithdrawalsIndex, true);
 
   const header = createInstructionHeader(DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL);
   const data = concatBytes(header, instructionData);
@@ -267,44 +294,85 @@ export function createProcessWithdrawalInstruction(
     keys: [
       { pubkey: bridgeState, isSigner: false, isWritable: true },
       { pubkey: genericBufferAccount, isSigner: false, isWritable: false },
+      { pubkey: wormholeShimProgramId, isSigner: false, isWritable: false },
+      { pubkey: bridgeConfig, isSigner: false, isWritable: true },
+      { pubkey: message, isSigner: false, isWritable: true },
+      { pubkey: sequence, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: feeCollector, isSigner: false, isWritable: true },
+      { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: wormholeCoreProgramId, isSigner: false, isWritable: false },
+      { pubkey: eventAuthority, isSigner: false, isWritable: false },
     ],
     programId,
     data: Buffer.from(data),
   });
 }
 
-export function createProcessManualDepositInstruction(
+export function processReplayWithdrawal(
   programId: PublicKey,
-  manualClaimPid: PublicKey,
-  recipient: PublicKey,
+  payer: PublicKey,
+  genericBufferAccount: PublicKey,
+  wormholeShimProgramId: PublicKey,
+  wormholeCoreProgramId: PublicKey
+): TransactionInstruction {
+  const [bridgeState] = getBridgeStatePda(programId);
+
+  // Derive Wormhole accounts
+  const [bridgeConfig] = PublicKey.findProgramAddressSync([Buffer.from("Bridge")], wormholeCoreProgramId);
+  const [feeCollector] = PublicKey.findProgramAddressSync([Buffer.from("fee_collector")], wormholeCoreProgramId);
+  const emitter = bridgeState;
+  const [sequence] = PublicKey.findProgramAddressSync([Buffer.from("Sequence"), emitter.toBuffer()], wormholeCoreProgramId);
+  const [message] = PublicKey.findProgramAddressSync([emitter.toBuffer()], wormholeShimProgramId);
+  const [eventAuthority] = PublicKey.findProgramAddressSync([Buffer.from("__event_authority")], wormholeShimProgramId);
+
+  const header = createInstructionHeader(DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: bridgeState, isSigner: false, isWritable: true },
+      { pubkey: genericBufferAccount, isSigner: false, isWritable: false },
+      { pubkey: wormholeShimProgramId, isSigner: false, isWritable: false },
+      { pubkey: bridgeConfig, isSigner: false, isWritable: true },
+      { pubkey: message, isSigner: false, isWritable: true },
+      { pubkey: sequence, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: feeCollector, isSigner: false, isWritable: true },
+      { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: wormholeCoreProgramId, isSigner: false, isWritable: false },
+      { pubkey: eventAuthority, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data: Buffer.from(header),
+  });
+}
+
+export function processManualDeposit(
+  programId: PublicKey,
+  manualClaimProgramId: PublicKey,
   mint: PublicKey,
+  recipient: PublicKey,
   txHash: Uint8Array,
   recentBlockMerkleTreeRoot: Uint8Array,
   recentAutoClaimTxoRoot: Uint8Array,
   combinedTxoIndex: bigint,
-  depositorPublicKey: PublicKey,
+  depositorSolanaPublicKey: Uint8Array,
   depositAmountSats: bigint
 ): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync([new TextEncoder().encode("bridge_state")], programId);
-  const [manualClaimSigner] = PublicKey.findProgramAddressSync([new TextEncoder().encode("manual-claim"), depositorPublicKey.toBuffer()], manualClaimPid);
+  const [bridgeState] = getBridgeStatePda(programId);
 
-  // Layout:
-  // tx_hash (32)
-  // recent_block_root (32)
-  // recent_auto_root (32)
-  // combined_index (8)
-  // depositor_key (32)
-  // amount (8)
   const dataSize = 32 + 32 + 32 + 8 + 32 + 8;
   const instructionData = new Uint8Array(dataSize);
   const view = new DataView(instructionData.buffer);
-  
+
   let offset = 0;
   instructionData.set(txHash, offset); offset += 32;
   instructionData.set(recentBlockMerkleTreeRoot, offset); offset += 32;
   instructionData.set(recentAutoClaimTxoRoot, offset); offset += 32;
   view.setBigUint64(offset, combinedTxoIndex, true); offset += 8;
-  instructionData.set(depositorPublicKey.toBuffer(), offset); offset += 32;
+  instructionData.set(depositorSolanaPublicKey, offset); offset += 32;
   view.setBigUint64(offset, depositAmountSats, true);
 
   const header = createInstructionHeader(DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT);
@@ -316,25 +384,74 @@ export function createProcessManualDepositInstruction(
       { pubkey: recipient, isSigner: false, isWritable: true },
       { pubkey: mint, isSigner: false, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: manualClaimSigner, isSigner: true, isWritable: false },
+      { pubkey: manualClaimProgramId, isSigner: true, isWritable: false },
     ],
     programId,
     data: Buffer.from(data),
   });
 }
 
-export function createProcessMintGroupInstruction(
+export function manualClaimDeposit(
+  programId: PublicKey,
+  bridgeProgramId: PublicKey,
+  userSigner: PublicKey,
+  payer: PublicKey,
+  mint: PublicKey,
+  recipient: PublicKey,
+  proof: CompactBridgeZKProof,
+  recentBlockMerkleTreeRoot: Uint8Array,
+  recentAutoClaimTxoRoot: Uint8Array,
+  newManualClaimTxoRoot: Uint8Array,
+  txHash: Uint8Array,
+  combinedTxoIndex: bigint,
+  depositAmountSats: bigint
+): TransactionInstruction {
+  const [claimPda] = getManualClaimPda(userSigner, programId);
+  const [bridgeState] = getBridgeStatePda(bridgeProgramId);
+
+  const instructionData = new Uint8Array(MANUAL_CLAIM_INSTRUCTION_DATA_SIZE);
+  encodeManualClaimInstructionData({
+    proof,
+    recentBlockMerkleTreeRoot,
+    recentAutoClaimTxoRoot,
+    newManualClaimTxoRoot,
+    txHash,
+    combinedTxoIndex,
+    depositAmountSats,
+  }, instructionData);
+
+  const header = createInstructionHeader(MC_MANUAL_CLAIM_TRANSACTION_DISCRIMINATOR);
+  const data = concatBytes(header, instructionData);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: claimPda, isSigner: false, isWritable: true },
+      { pubkey: bridgeState, isSigner: false, isWritable: false },
+      { pubkey: recipient, isSigner: false, isWritable: true },
+      { pubkey: mint, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: bridgeProgramId, isSigner: false, isWritable: false },
+      { pubkey: userSigner, isSigner: true, isWritable: false },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data: Buffer.from(data),
+  });
+}
+
+export function processMintGroup(
   programId: PublicKey,
   operator: PublicKey,
-  dogeMint: PublicKey,
   mintBuffer: PublicKey,
-  pendingMintPid: PublicKey,
-  recipientAtas: PublicKey[],
+  dogeMint: PublicKey,
+  recipients: PublicKey[],
   groupIndex: number,
   mintBufferBump: number,
   shouldUnlock: boolean,
+  pendingMintPid: PublicKey = PENDING_MINT_BUFFER_BUILDER_PROGRAM_ID
 ): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync([new TextEncoder().encode("bridge_state")], programId);
+  const [bridgeState] = getBridgeStatePda(programId);
 
   const payload = new Uint8Array(4);
   const view = new DataView(payload.buffer);
@@ -355,26 +472,28 @@ export function createProcessMintGroupInstruction(
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
   ];
 
-  recipientAtas.forEach(r => keys.push({ pubkey: r, isSigner: false, isWritable: true }));
+  for (const r of recipients) {
+    keys.push({ pubkey: r, isSigner: false, isWritable: true });
+  }
 
   return new TransactionInstruction({ keys, programId, data: Buffer.from(data) });
 }
 
-export function createProcessMintGroupAutoAdvanceInstruction(
+export function processMintGroupAutoAdvance(
   programId: PublicKey,
   operator: PublicKey,
-  dogeMint: PublicKey,
   mintBuffer: PublicKey,
   txoBuffer: PublicKey,
-  pendingMintPid: PublicKey,
-  txoBufferPid: PublicKey,
-  recipientAtas: PublicKey[],
+  dogeMint: PublicKey,
+  recipients: PublicKey[],
   groupIndex: number,
   mintBufferBump: number,
   txoBufferBump: number,
   shouldUnlock: boolean,
+  pendingMintPid: PublicKey = PENDING_MINT_BUFFER_BUILDER_PROGRAM_ID,
+  txoBufferPid: PublicKey = TXO_BUFFER_BUILDER_PROGRAM_ID
 ): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync([new TextEncoder().encode("bridge_state")], programId);
+  const [bridgeState] = getBridgeStatePda(programId);
 
   const payload = new Uint8Array(4);
   const view = new DataView(payload.buffer);
@@ -397,21 +516,20 @@ export function createProcessMintGroupAutoAdvanceInstruction(
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
   ];
 
-  recipientAtas.forEach(r => keys.push({ pubkey: r, isSigner: false, isWritable: true }));
+  for (const r of recipients) {
+    keys.push({ pubkey: r, isSigner: false, isWritable: true });
+  }
 
   return new TransactionInstruction({ keys, programId, data: Buffer.from(data) });
 }
 
-export function createOperatorWithdrawFeesInstruction(
+export function operatorWithdrawFees(
   programId: PublicKey,
   operator: PublicKey,
   operatorTokenAccount: PublicKey,
-  dogeMint: PublicKey,
+  dogeMint: PublicKey
 ): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync(
-    [new TextEncoder().encode("bridge_state")],
-    programId
-  );
+  const [bridgeState] = getBridgeStatePda(programId);
 
   const header = createInstructionHeader(DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES);
 
@@ -428,54 +546,211 @@ export function createOperatorWithdrawFeesInstruction(
   });
 }
 
-export function createManualClaimInstruction(
-  manualClaimProgramId: PublicKey,
-  bridgeProgramId: PublicKey,
-  payer: PublicKey,
-  userSigner: PublicKey,
-  mint: PublicKey,
-  recipientTokenAccount: PublicKey,
-  proof: Uint8Array,
-  recentBlockMerkleTreeRoot: Uint8Array,
-  recentAutoClaimTxoRoot: Uint8Array,
-  newManualClaimTxoRoot: Uint8Array,
-  txHash: Uint8Array,
-  combinedTxoIndex: bigint,
-  depositAmountSats: bigint
+export function snapshotWithdrawals(
+  programId: PublicKey,
+  operator: PublicKey,
+  payer: PublicKey
 ): TransactionInstruction {
-  const [bridgeState] = PublicKey.findProgramAddressSync([new TextEncoder().encode("bridge_state")], bridgeProgramId);
-  const [claimPda] = PublicKey.findProgramAddressSync(
-    [new TextEncoder().encode("manual-claim"), userSigner.toBuffer()],
-    manualClaimProgramId
-  );
+  const [bridgeState] = getBridgeStatePda(programId);
 
-  const instructionData = new Uint8Array(MANUAL_CLAIM_INSTRUCTION_DATA_SIZE);
-  encodeManualClaimInstructionData({
-    proof,
-    recent_block_merkle_tree_root: recentBlockMerkleTreeRoot,
-    recent_auto_claim_txo_root: recentAutoClaimTxoRoot,
-    new_manual_claim_txo_root: newManualClaimTxoRoot,
-    tx_hash: txHash,
-    combined_txo_index: combinedTxoIndex,
-    deposit_amount_sats: depositAmountSats
-  }, instructionData);
-
-  const header = createInstructionHeader(MANUAL_CLAIM_INSTRUCTION_CLAIM);
-  const data = concatBytes(header, instructionData);
+  const header = createInstructionHeader(DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS);
 
   return new TransactionInstruction({
     keys: [
-      { pubkey: claimPda, isSigner: false, isWritable: true },
       { pubkey: bridgeState, isSigner: false, isWritable: true },
-      { pubkey: recipientTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: mint, isSigner: false, isWritable: true },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: bridgeProgramId, isSigner: false, isWritable: false },
-      { pubkey: userSigner, isSigner: true, isWritable: false },
+      { pubkey: operator, isSigner: true, isWritable: false },
+      { pubkey: payer, isSigner: true, isWritable: true },
+    ],
+    programId,
+    data: Buffer.from(header),
+  });
+}
+
+// =============================================================================
+// Buffer Instructions
+// =============================================================================
+
+export function genericBufferInit(
+  programId: PublicKey,
+  account: PublicKey,
+  payer: PublicKey,
+  targetSize: number
+): TransactionInstruction {
+  const data = new Uint8Array(5);
+  data[0] = 0;
+  new DataView(data.buffer).setUint32(1, targetSize, true);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: account, isSigner: false, isWritable: true },
       { pubkey: payer, isSigner: true, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
-    programId: manualClaimProgramId,
+    programId,
+    data: Buffer.from(data),
+  });
+}
+
+export function genericBufferWrite(
+  programId: PublicKey,
+  account: PublicKey,
+  payer: PublicKey,
+  offset: number,
+  bytes: Uint8Array
+): TransactionInstruction {
+  const data = new Uint8Array(5 + bytes.length);
+  data[0] = 2;
+  new DataView(data.buffer).setUint32(1, offset, true);
+  data.set(bytes, 5);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: account, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data: Buffer.from(data),
+  });
+}
+
+export function pendingMintSetup(
+  programId: PublicKey,
+  account: PublicKey,
+  locker: PublicKey,
+  writer: PublicKey
+): TransactionInstruction {
+  const data = new Uint8Array(65);
+  data[0] = 0;
+  data.set(locker.toBuffer(), 1);
+  data.set(writer.toBuffer(), 33);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: account, isSigner: false, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data: Buffer.from(data),
+  });
+}
+
+export function pendingMintReinit(
+  programId: PublicKey,
+  account: PublicKey,
+  payer: PublicKey,
+  totalMints: number
+): TransactionInstruction {
+  const data = new Uint8Array(3);
+  data[0] = 1;
+  new DataView(data.buffer).setUint16(1, totalMints, true);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: account, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data: Buffer.from(data),
+  });
+}
+
+export function pendingMintInsert(
+  programId: PublicKey,
+  account: PublicKey,
+  payer: PublicKey,
+  groupIdx: number,
+  mintData: Uint8Array
+): TransactionInstruction {
+  const data = new Uint8Array(3 + mintData.length);
+  data[0] = 3;
+  new DataView(data.buffer).setUint16(1, groupIdx, true);
+  data.set(mintData, 3);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: account, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data: Buffer.from(data),
+  });
+}
+
+export function txoBufferInit(
+  programId: PublicKey,
+  account: PublicKey,
+  writer: PublicKey
+): TransactionInstruction {
+  const data = new Uint8Array(33);
+  data[0] = 0;
+  data.set(writer.toBuffer(), 1);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: account, isSigner: false, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data: Buffer.from(data),
+  });
+}
+
+export function txoBufferSetLen(
+  programId: PublicKey,
+  account: PublicKey,
+  payer: PublicKey,
+  writer: PublicKey,
+  newLen: number,
+  resize: boolean,
+  batchId: number,
+  height: number,
+  finalize: boolean
+): TransactionInstruction {
+  const data = new Uint8Array(15);
+  const view = new DataView(data.buffer);
+  data[0] = 1;
+  view.setUint32(1, newLen, true);
+  data[5] = resize ? 1 : 0;
+  view.setUint32(6, batchId, true);
+  view.setUint32(10, height, true);
+  data[14] = finalize ? 1 : 0;
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: account, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: writer, isSigner: true, isWritable: false },
+    ],
+    programId,
+    data: Buffer.from(data),
+  });
+}
+
+export function txoBufferWrite(
+  programId: PublicKey,
+  account: PublicKey,
+  writer: PublicKey,
+  batchId: number,
+  offset: number,
+  bytes: Uint8Array
+): TransactionInstruction {
+  const data = new Uint8Array(9 + bytes.length);
+  const view = new DataView(data.buffer);
+  data[0] = 2;
+  view.setUint32(1, batchId, true);
+  view.setUint32(5, offset, true);
+  data.set(bytes, 9);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: account, isSigner: false, isWritable: true },
+      { pubkey: writer, isSigner: true, isWritable: true },
+    ],
+    programId,
     data: Buffer.from(data),
   });
 }

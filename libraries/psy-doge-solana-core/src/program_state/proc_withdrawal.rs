@@ -1,4 +1,4 @@
-use psy_bridge_core::{common_types::QHash256, crypto::{hash::sha256::btc_hash256_bytes, zk::CompactZKProofVerifier}, error::{DogeBridgeError, QDogeResult}};
+use psy_bridge_core::{common_types::QHash256, crypto::{hash::sha256_impl::hash_impl_sha256_bytes, zk::CompactZKProofVerifier}, error::{DogeBridgeError, QDogeResult}};
 
 use crate::{
     generic_cpi::BurnCPIHelper,
@@ -7,8 +7,6 @@ use crate::{
 
 
 impl PsyBridgeProgramState {
-    // only callable from the user manual mint program which checks a zkp to ensure that the user's deposit is not in the auto claimed tree and not in the user's own manually claimed tree
-    // we need to check to make sure the caller/signer's PDA corresponds to the correct user manual mint program and the user and the first valid seed (ie. ensure you cannot have multiple instances per user)
     pub fn run_process_bridge_withdrawal<
         ZKVerfier: CompactZKProofVerifier    
         >(
@@ -21,9 +19,11 @@ impl PsyBridgeProgramState {
         new_next_processed_withdrawals_index: u64,
     ) -> QDogeResult<QHash256> {
 
-        let doge_tx_hash = btc_hash256_bytes(dogecoin_tx);
+        let doge_tx_hash = hash_impl_sha256_bytes(dogecoin_tx);
+        if doge_tx_hash != new_return_output.sighash {
+            return Err(DogeBridgeError::InvalidDogeTxHash);
+        }
         let expected_public_inputs = self.get_expected_public_inputs_for_withdrawal_proof(
-            &doge_tx_hash,
             &new_return_output,
             new_spent_txo_tree_root,
             new_next_processed_withdrawals_index,
@@ -45,14 +45,11 @@ impl PsyBridgeProgramState {
         burner: &Burner,
         requester: &[u8; 32],
         request: &PsyWithdrawalRequest,
-        recipient_address: [u8; 20],
-        address_type: u32, // 0 = P2PKH, 1 = P2SH
-        amount_sats: u64,
     ) -> QDogeResult<()> {
         let ok = self.process_request_withdrawal(
-            address_type,
-            recipient_address,
-            amount_sats
+            request.address_type,
+            request.recipient_address,
+            request.amount_sats
         );
 
         if !ok {

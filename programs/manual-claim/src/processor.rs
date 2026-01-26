@@ -5,6 +5,7 @@ use psy_bridge_core::common_types::QHash256;
 use psy_bridge_core::crypto::zk::{CompactBridgeZKProof, CompactBridgeZKVerifierKey};
 use psy_bridge_core::error::{DogeBridgeError, QDogeResult};
 use psy_doge_solana_core::generic_cpi::ManualDepositMainBridgeCPIHelper;
+use psy_doge_solana_core::program_state::BridgeProgramStateWithDogeMint;
 use psy_doge_solana_core::user_manual_deposit_manager::UserManualDepositManagerProgramState;
 use solana_program::{
     account_info::{next_account_info, AccountInfo}, entrypoint::ProgramResult, instruction::{AccountMeta, Instruction}, program::invoke_signed, pubkey::Pubkey, rent::Rent, system_instruction, sysvar::Sysvar
@@ -85,6 +86,15 @@ fn process_claim(
         return Err(ManualClaimError::InvalidPDA.into());
     }
 
+    //for the recipient account, we need to ensure it is a valid associated token account for the user and doge mint
+    let expected_recipient_ata = spl_associated_token_account::get_associated_token_address(
+        user.key,
+        doge_mint.key,
+    );
+    if expected_recipient_ata != *recipient_account.key {
+        return Err(ManualClaimError::InvalidRecipientATA.into());
+    }
+
     if claim_state_pda.data_len() == 0 {
         let space = std::mem::size_of::<UserManualDepositManagerProgramState>();
         let rent = Rent::get()?.minimum_balance(space);
@@ -112,6 +122,14 @@ fn process_claim(
     let state = bytemuck::try_from_bytes_mut::<UserManualDepositManagerProgramState>(&mut claim_data)
         .map_err(|_| ManualClaimError::SerializationError)?;
 
+    let custodian_wallet_config_hash = {
+        let bridge_data = bridge_state_account.try_borrow_data()?;
+        
+        let bridge_state = bytemuck::try_from_bytes::<BridgeProgramStateWithDogeMint>(&bridge_data)
+            .map_err(|_| ManualClaimError::SerializationError)?;
+        bridge_state.core_state.custodian_wallet_config_hash
+    };
+
     let helper = SolanaManualDepositHelper {
         bridge_program: main_bridge_program,
         bridge_state: bridge_state_account,
@@ -129,6 +147,7 @@ fn process_claim(
         recent_block_merkle_tree_root,
         recent_auto_claim_txo_root,
         new_manual_claim_txo_root,
+        custodian_wallet_config_hash,
         tx_hash,
         combined_txo_index,
         user.key.to_bytes(),

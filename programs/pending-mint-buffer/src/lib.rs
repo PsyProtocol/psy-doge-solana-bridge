@@ -3,7 +3,6 @@ use solana_program::{
     account_info::{AccountInfo, next_account_info}, declare_id, entrypoint::ProgramResult, hash::hash, msg, program::invoke_signed, program_error::ProgramError, pubkey::Pubkey, rent::Rent, system_instruction, sysvar::Sysvar
 };
 
-// ... (Structs unchanged) ...
 const MAX_PENDING_MINTS_PER_GROUP: usize = 24;
 const MAX_PENDING_MINTS_PER_GROUP_U16: u16 = MAX_PENDING_MINTS_PER_GROUP as u16;
 const MAX_PERMITTED_DATA_INCREASE: usize = 10_240;
@@ -29,7 +28,6 @@ pub struct PendingMintsBufferStateHeader {
 }
 const HEADER_SIZE: usize = std::mem::size_of::<PendingMintsBufferStateHeader>();
 
-// ... (Helpers unchanged) ...
 pub fn transfer_lamports_from_pdas<'a>(
     from: &AccountInfo<'a>,
     to: &AccountInfo<'a>,
@@ -70,7 +68,6 @@ pub fn realloc_account<'a>(
     target_account.realloc(new_size, false)
 }
 
-// ... (Impl unchanged) ...
 impl PendingMintsBufferStateHeader {
     pub fn setup(
         &mut self,
@@ -89,7 +86,6 @@ impl PendingMintsBufferStateHeader {
         self.pending_mints_count = 0;
         Ok(())
     }
-    // ... (reinit, lock, unlock unchanged)
     pub fn reinit(&mut self, pending_mints_count: u16) -> ProgramResult {
         if self.is_locked != 0 { return Err(ProgramError::AccountAlreadyInitialized); }
         self.pending_mints_count = pending_mints_count;
@@ -118,7 +114,6 @@ impl PendingMintsBufferStateHeader {
     }
 }
 
-// ... (DataContractState unchanged) ...
 pub struct DataContractState<'a> {
     data: &'a mut [u8],
 }
@@ -175,9 +170,6 @@ pub fn process_instruction(
     let account_info_iter = &mut accounts.iter();
     let storage_account = next_account_info(account_info_iter)?;
 
-    // Only check Owner if not in init/alloc phase (Tag 0)
-    // Actually, even in Tag 0, if the account exists, it must be owned by us.
-    // If it doesn't exist, we invoke allocate.
     
     let require_signer = |acc: &AccountInfo| -> ProgramResult {
         if !acc.is_signer { Err(ProgramError::MissingRequiredSignature) } else { Ok(()) }
@@ -377,4 +369,4 @@ pub fn process_instruction(
     Ok(())
 }
 
-declare_id!("Pend1ngM1ntBuffer11111111111111111111111111"); 
+declare_id!("PMUSqycT1j5JTLmHk8frGSCido2h9VG1pyh2MPEa33o"); 

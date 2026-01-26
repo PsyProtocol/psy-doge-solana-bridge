@@ -23,3 +23,4 @@ bytemuck = { workspace = true }
 
 psy-bridge-core = { path = "../../libraries/psy-bridge-core", default-features = false,  features = ["serialize_borsh", "serialize_bytemuck"] }
 psy-doge-solana-core = { path = "../../libraries/psy-doge-solana-core", default-features = false, features = ["serialize_borsh", "serialize_bytemuck"] }
+spl-associated-token-account = { workspace = true, features = ["no-entrypoint"] }

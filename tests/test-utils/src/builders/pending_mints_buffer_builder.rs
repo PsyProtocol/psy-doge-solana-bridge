@@ -1,4 +1,5 @@
 use psy_bridge_core::{common_types::QHash256, crypto::hash::sha256_impl::hash_impl_sha256_bytes};
+use psy_doge_solana_core::data_accounts::pending_mint::{PM_DA_DEFAULT_PENDING_MINTS_BUFFER_HASH, PM_DA_PENDING_MINT_SIZE, PendingMint};
 
 
 const MAX_PENDING_MINTS_PER_GROUP: usize = 24;
@@ -10,7 +11,7 @@ pub struct PendingMint {
     pub amount: u64,
 }
 */
-const PENDING_MINT_SIZE: usize = 40;
+const PENDING_MINT_SIZE: usize = PM_DA_PENDING_MINT_SIZE;
 
 pub struct PendingMintsGroupsBuilder {
     pub group_hashes_buffer: Vec<u8>,
@@ -80,12 +81,48 @@ impl PendingMintsGroupsBuilder {
         Ok(hash_impl_sha256_bytes(&self.group_hashes_buffer))
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 #[repr(C)]
 pub struct PendingMintsAutoClaimBufferTemplate {
     pub groups: Vec<Vec<u8>>,
     pub finalized_hash: QHash256,
     pub total_items: u16,
+}
+
+fn pending_mints_data_to_vec(data: &[u8]) -> anyhow::Result<Vec<PendingMint>> {
+    if data.len() % PENDING_MINT_SIZE != 0 {
+        return Err(anyhow::anyhow!("Invalid pending mints data length: {}", data.len()));
+    }
+    let mut pending_mints = Vec::new();
+    let num_items = data.len() / PENDING_MINT_SIZE;
+    for i in 0..num_items {
+        let start_index = i * PENDING_MINT_SIZE;
+        let mut recipient = [0u8; 32];
+        recipient.copy_from_slice(&data[start_index..start_index + 32]);
+        let amount = u64::from_le_bytes(
+            data[start_index + 32..start_index + 40]
+                .try_into()
+                .unwrap(),
+        );
+        pending_mints.push(PendingMint {
+            recipient,
+            amount,
+        });
+    }
+    Ok(pending_mints)
+}
+impl PendingMintsAutoClaimBufferTemplate {
+    pub fn new_empty() -> Self {
+        Self {
+            groups: vec![],
+            finalized_hash: PM_DA_DEFAULT_PENDING_MINTS_BUFFER_HASH,
+            total_items: 0,
+        }
+    }
+    pub fn get_pending_mints(&self) -> anyhow::Result<Vec<Vec<PendingMint>>> {
+        self.groups.iter().map(|group_data| pending_mints_data_to_vec(group_data)).collect()
+    }
 }
 
 pub struct PendingMintsGroupsBufferBuilder {

@@ -1,25 +1,49 @@
 [package]
 name = "doge-bridge-client"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
+# Solana dependencies
 solana-sdk = { workspace = true }
 solana-client = { workspace = true }
 solana-program = { workspace = true }
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true }
-futures = { workspace = true }
-bytemuck = { workspace = true }
-borsh = { workspace = true }
 spl-token = { workspace = true }
 spl-associated-token-account = { workspace = true }
 
-psy-bridge-core = { path = "../../libraries/psy-bridge-core", features = ["std", "serialize_bytemuck"], default-features = false }
+# Async runtime
+tokio = { workspace = true }
+futures = { workspace = true }
+async-trait = "0.1"
+
+# Rate limiting
+governor = "0.6"
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Serialization
+bytemuck = { workspace = true }
+borsh = { workspace = true }
+bincode = { workspace = true }
+base64 = "0.21"
+
+# Solana transaction status
+solana-transaction-status = "=2.2.1"
+
+# Logging
+tracing = "0.1"
+
+# Local libraries
+psy-bridge-core = { path = "../../libraries/psy-bridge-core", features = ["std", "serialize_bytemuck", "sha2"], default-features = false }
 psy-doge-solana-core = { path = "../../libraries/psy-doge-solana-core", features = ["std", "serialize_bytemuck", "fake_signer"], default-features = false }
-# doge-bridge = { path = "../../programs/doge-bridge", features = ["no-entrypoint"], default-features = false }
-# manual-claim = { path = "../../programs/manual-claim", features = ["no-entrypoint"], default-features = false }
-generic-buffer = { path = "../../programs/generic-buffer", features = ["no-entrypoint"], default-features = false }
-pending-mint-buffer = { path = "../../programs/pending-mint-buffer", features = ["no-entrypoint"], default-features = false }
-txo-buffer = { path = "../../programs/txo-buffer", features = ["no-entrypoint"], default-features = false }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+hex = "0.4"
+tracing-subscriber = "0.3"
+
+[[example]]
+name = "noop_shim_monitor"
+path = "examples/noop_shim_monitor.rs"

@@ -6,7 +6,7 @@ pub const TXO_TREE_INDEX_BITS_TX_NUM_LENGTH: usize = 13;
 pub const TXO_TREE_INDEX_BITS_TOP_OUTPUT_NUM_LENGTH: usize = 4;
 pub const TXO_TREE_LEAF_BIT_INDEX_LENGTH: usize = 8;
 pub const TXO_TREE_COMBINED_INDEX_BITS_OUTPUT_NUM_LENGTH: usize = TXO_TREE_INDEX_BITS_TOP_OUTPUT_NUM_LENGTH + TXO_TREE_LEAF_BIT_INDEX_LENGTH;
-
+pub const TXO_TREE_BLOCK_EMPTY_ROOT: QHash256 = SHA256_ZERO_HASHES[TXO_TREE_INDEX_BITS_TX_NUM_LENGTH + TXO_TREE_INDEX_BITS_TOP_OUTPUT_NUM_LENGTH];
 pub const TXO_MERKLE_INDEX_TOTAL_BITS: usize =
     TXO_TREE_INDEX_BITS_BLOCK_NUM_LENGTH +
     TXO_TREE_INDEX_BITS_TX_NUM_LENGTH +
@@ -123,6 +123,10 @@ pub const fn get_output_in_tx_merkle_index_bit_index(output_index_in_tx: u16) ->
     let merkle_index = (output_index_in_tx >> 8) as u8;
     (merkle_index, bit_index)
 }
+#[inline(always)]
+pub const fn get_output_index_from_combined_index(combined_index: u64) -> u16 {
+    (combined_index & TXO_TREE_INDEX_OUTPUT_NUM_LOWERED_MASK) as u16
+}
 
 
 #[inline(always)]
@@ -145,6 +149,12 @@ pub const fn get_output_bit_index_in_leaf(output_index_in_tx: u16) -> (u8, u8, u
     let byte_index = byte_bit_index >> 3;
 
     (merkle_index, byte_index, bit_mask)
+}
+#[inline(always)]
+pub const fn get_txo_merkle_index_and_leaf_bit_index_from_combined_index(combined_index: u64) -> (u64, u8) {
+    let merkle_index = combined_index >> TXO_TREE_LEAF_BIT_INDEX_LENGTH;
+    let bit_index = (combined_index & ((1u64 << TXO_TREE_LEAF_BIT_INDEX_LENGTH) - 1)) as u8;
+    (merkle_index, bit_index)
 }
 #[cfg(test)]
 mod tests {

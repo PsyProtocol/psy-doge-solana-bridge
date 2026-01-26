@@ -1,7 +1,7 @@
 use psy_doge_solana_core::instructions::manual_claim::{MC_MANUAL_CLAIM_TRANSACTION_DESCRIMINATOR, ManualClaimInstruction};
 use psy_bridge_core::{common_types::QHash256, crypto::zk::CompactBridgeZKProof, header::PsyBridgeHeader};
 use psy_doge_solana_core::program_state::{FinalizedBlockMintTxoInfo, PsyReturnTxOutput, PsyWithdrawalRequest};
-use psy_doge_solana_core::instructions::doge_bridge::{BlockUpdateFixedData, DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE, DOGE_BRIDGE_INSTRUCTION_INITIALIZE, DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE, DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS, DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL, InitializeBridgeInstructionData, InitializeBridgeParams, ProcessManualDepositInstructionData, ProcessReorgBlocksFixedData, ProcessWithdrawalInstructionData, RequestWithdrawalInstructionData};
+use psy_doge_solana_core::instructions::doge_bridge::{BlockUpdateFixedData, DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE, DOGE_BRIDGE_INSTRUCTION_INITIALIZE, DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES, DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE, DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS, DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS, InitializeBridgeInstructionData, InitializeBridgeParams, ProcessManualDepositInstructionData, ProcessReorgBlocksFixedData, ProcessWithdrawalInstructionData, RequestWithdrawalInstructionData};
 use solana_sdk::sysvar::clock;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -47,6 +47,7 @@ pub fn initialize_bridge(
         bridge_header: initialize_bridge_params.bridge_header,
         start_return_txo_output: initialize_bridge_params.start_return_txo_output,
         config_params: initialize_bridge_params.config_params,
+        custodian_wallet_config_hash: initialize_bridge_params.custodian_wallet_config_hash,
     };
     let data = gen_aligned_instruction(
         DOGE_BRIDGE_INSTRUCTION_INITIALIZE,
@@ -153,8 +154,6 @@ pub fn request_withdrawal(
     
     let data_struct = RequestWithdrawalInstructionData {
         request,
-        recipient_address,
-        address_type,
     };
     
     let data = gen_aligned_instruction(
@@ -426,6 +425,7 @@ pub fn pending_mint_setup(program_id: Pubkey, account: Pubkey, locker: Pubkey, w
         program_id,
         accounts: vec![
             AccountMeta::new(account, false),
+            AccountMeta::new_readonly(system_program::id(), false), // System Program for allocate/assign CPI
         ],
         data,
     }
@@ -557,7 +557,10 @@ pub fn txo_buffer_init(program_id: Pubkey, account: Pubkey, writer: Pubkey) -> I
     data.extend_from_slice(writer.as_ref());
     Instruction {
         program_id,
-        accounts: vec![AccountMeta::new(account, false)],
+        accounts: vec![
+            AccountMeta::new(account, false),
+            AccountMeta::new_readonly(system_program::id(), false), // System Program for allocate/assign CPI
+        ],
         data,
     }
 }
@@ -609,6 +612,49 @@ pub fn txo_buffer_write(
         accounts: vec![
             AccountMeta::new(account, false),
             AccountMeta::new(writer, true),
+        ],
+        data,
+    }
+}
+
+pub fn operator_withdraw_fees(
+    program_id: Pubkey,
+    operator: Pubkey,
+    operator_token_account: Pubkey,
+    doge_mint: Pubkey,
+) -> Instruction {
+    let (bridge_state, _) = Pubkey::find_program_address(&[b"bridge_state"], &program_id);
+
+    let data = gen_aligned_instruction(DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES, &[]);
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(bridge_state, false),
+            AccountMeta::new(operator_token_account, false),
+            AccountMeta::new(doge_mint, false),
+            AccountMeta::new(operator, true),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data,
+    }
+}
+
+pub fn snapshot_withdrawals(
+    program_id: Pubkey,
+    operator: Pubkey,
+    payer: Pubkey,
+) -> Instruction {
+    let (bridge_state, _) = Pubkey::find_program_address(&[b"bridge_state"], &program_id);
+
+    let data = gen_aligned_instruction(DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS, &[]);
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(bridge_state, false),
+            AccountMeta::new_readonly(operator, true),
+            AccountMeta::new(payer, true),
         ],
         data,
     }

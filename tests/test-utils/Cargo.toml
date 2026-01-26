@@ -23,4 +23,7 @@ pending-mint-buffer = { path = "../../programs/pending-mint-buffer", features = 
 txo-buffer = { path = "../../programs/txo-buffer", features = ["no-entrypoint"], default-features = false }
 generic-buffer = { path = "../../programs/generic-buffer", features = ["no-entrypoint"], default-features = false }
 manual-claim = { path = "../../programs/manual-claim", features = ["no-entrypoint"] }
+noop-shim = { path = "../../programs/noop-shim", features = ["no-entrypoint"] }
 hex = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }

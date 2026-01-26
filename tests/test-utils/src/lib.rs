@@ -1,7 +1,9 @@
 pub mod mock_data;
 pub mod test_client;
 pub mod block_transition_helper;
-pub mod pending_mints_buffer_builder;
+pub mod builders;
+pub mod tree;
+pub mod constants;
 
 // 1. Add these imports at the top of the file.
 use doge_bridge::processor::process_instruction as doge_bridge_processor;

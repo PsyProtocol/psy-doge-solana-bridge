@@ -1,0 +1,16 @@
+{
+  "bridge_state_pda": "9vzbk8X27e6VRcCPWCyxZsa2DV6GLQ3y9e1mXzfAgUdX",
+  "bridge_state_pda_hex": "84b267dd47474dd7ee3b7d7fb5b10d8626bf52ff8d2c82135770fead3a5ab1ba",
+  "doge_mint": "BSeubjhLxFwjb4pcoE5X67aZfQuznzcbRfxvcHtUsziA",
+  "doge_mint_hex": "9b27403d2da9528aca6435166a9d40df0c7ab6733b0ce5bd510af3cb2fcdd837",
+  "doge_mint_metadata_pda": "RawfRBVH7L2HVsGM3pDJt4tMpYNy3bkjg6it4Awi4yP",
+  "operator_pubkey": "7f3Yvc7Gb1C9JdVEC58tyRLep78jEdsrTq55fNWLNzWW",
+  "operator_pubkey_hex": "62e513794a97e6eb5b523d2717e297dc25c23c4dc3635ce6d092d9a6ef7be28b",
+  "fee_spender_pubkey": "4mqbvZaVcGtp99wj6cbJuddGCxGPVLNAnUPXPYPbT6LP",
+  "fee_spender_pubkey_hex": "380f922bcaf38c8c0260ecf52cc49bafc2093e8b38ce4b5da964cb606c6cacc8",
+  "payer_pubkey": "EwjPgDYAJV79YBHUU3iLuEoGVEouewzVU46xhXhQMvwf",
+  "payer_pubkey_hex": "cf2d39b0ba2fde218b8dad2b9ac90a5013a11561ef6e866e51534716d380d9e6",
+  "initialize_tx_signature": "3QLKKigvgY2WceMMj1C4RNPd21cKF7RzP2Niie275gKfvqHb5RQRjMWx5WoL86ms3ejNYMCikEnwa33DVb7vYK5j",
+  "create_mint_tx_signature": "4Fni1N6n6dbiDhnaM3MNaZLgzPU6Kz3Em86V7DGDe4WzXfLkeFVtHFjRyqXYnGzfz2w2prMYQFi7Jted5atsARqf",
+  "create_metadata_tx_signature": "3oGyfm8UvgSbFUpUWxGoPfa6JfzJT865CaNNGvt1Jr1fgmmr2euxcJG44mu6ZU1Qm2uiRHGUB1DZVjFoYmHXKoQb"
+}

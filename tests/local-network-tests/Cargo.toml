@@ -1,0 +1,35 @@
+[package]
+name = "doge-bridge-local-network-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Client and test utilities
+doge-bridge-client = { path = "../../clients/rust" }
+doge-bridge-test-utils = { path = "../test-utils" }
+
+# Solana SDK
+solana-sdk = { workspace = true }
+solana-client = { workspace = true }
+
+# Bridge libraries
+psy-bridge-core = { path = "../../libraries/psy-bridge-core", default-features = false, features = ["std", "serialize_bytemuck"] }
+psy-doge-solana-core = { path = "../../libraries/psy-doge-solana-core", default-features = false, features = ["std", "serialize_bytemuck", "fake_signer"] }
+
+# Programs (for state types)
+doge-bridge = { path = "../../programs/doge-bridge", features = ["no-entrypoint"], default-features = false }
+
+# SPL
+spl-token = { workspace = true }
+spl-associated-token-account = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+
+# Utilities
+bytemuck = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

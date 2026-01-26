@@ -1,10 +1,8 @@
 
 use psy_bridge_core::{
-    header::{PsyBridgeHeader, PsyBridgeStateCommitment},
     crypto::{
-        zk::{CompactBridgeZKProof},
-        hash::sha256_impl::hash_impl_sha256_bytes,
-    }
+        hash::sha256_impl::hash_impl_sha256_bytes, zk::CompactBridgeZKProof
+    }, header::{PsyBridgeHeader, PsyBridgeStateCommitment, PsyBridgeTipStateCommitment}
 };
 use psy_doge_solana_core::{data_accounts::pending_mint::{PM_DA_DEFAULT_PENDING_MINTS_BUFFER_HASH, PM_TXO_DEFAULT_BUFFER_HASH, PendingMint}, fake_zkp::FakeZKProofGenerator};
 
@@ -22,7 +20,12 @@ pub fn generate_fake_header(height: u32) -> PsyBridgeHeader {
     };
     
     PsyBridgeHeader {
-        tip_state: state.clone(),
+        tip_state: PsyBridgeTipStateCommitment {
+            block_hash: empty_hash,
+            block_merkle_tree_root: empty_hash,
+            block_time: 0,
+            block_height: height,
+        },
         finalized_state: state,
         bridge_state_hash: empty_hash,
         last_rollback_at_secs: 0,

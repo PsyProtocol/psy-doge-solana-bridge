@@ -6,11 +6,15 @@ members = [
     "programs/generic-buffer",
     "programs/doge-bridge",
     "programs/manual-claim",
+    "programs/noop-shim",
     "libraries/psy-bridge-core",
     "libraries/psy-doge-solana-core",
     "clients/rust",
+    "clients/rust_user",
+    "cli",
     "tests/test-utils",
-    "tests/integration"
+    "tests/integration",
+    "tests/local-network-tests",
 ]
 
 [workspace.dependencies]
@@ -109,6 +113,7 @@ uuid = { version = "1.0", features = ["serde", "v4", "js"] }
 # SPL Dependencies
 spl-token = "8.0.0"
 spl-associated-token-account = "7.0.0"
+mpl-token-metadata = "5.1.0"
 
 # Dev dependencies
 criterion = { version = "0.5.1", features = ["async_tokio", "async_futures"] }
