@@ -8,6 +8,7 @@ PROGRAMS=(
     "pending-mint-buffer"
     "txo-buffer"
     "generic-buffer"
+    "noop-shim"
 )
 
 echo "------------------------------------------------"
