@@ -60,7 +60,8 @@ pub struct PsyBridgeProgramState {
 
     pub custodian_wallet_config_hash: QHash256,
     pub incoming_transition_custodian_config_hash: QHash256,
-    pub last_detected_custodian_transition_seconds: u64, // when we last saw a custodian config transition
+    pub last_detected_custodian_transition_seconds: u32, // when we last saw a custodian config transition
+    pub deposits_paused_mode: u32, // 0 = active, 1 = paused
     pub bridge_control_mode: u32,
     pub next_recent_finalized_block_index: u32,
     pub last_processed_withdrawals_at_ms: u64,
