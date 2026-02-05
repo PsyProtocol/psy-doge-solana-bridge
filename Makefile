@@ -73,6 +73,7 @@ TXO_BUFFER_KEY := $(PROGRAM_KEYS_DIR)/txo-buffer.json
 GENERIC_BUFFER_KEY := $(PROGRAM_KEYS_DIR)/generic-buffer.json
 MANUAL_CLAIM_KEY := $(PROGRAM_KEYS_DIR)/manual-claim.json
 NOOP_SHIM_KEY := $(PROGRAM_KEYS_DIR)/noop-shim.json
+CUSTODIAN_SET_MANAGER_KEY := keys/custodian-set-manager.json
 
 # Program binary paths
 BUILD_DIR := target/sbpf-solana-solana/release
@@ -82,6 +83,7 @@ TXO_BUFFER_SO := $(BUILD_DIR)/txo_buffer.so
 GENERIC_BUFFER_SO := $(BUILD_DIR)/generic_buffer.so
 MANUAL_CLAIM_SO := $(BUILD_DIR)/manual_claim.so
 NOOP_SHIM_SO := $(BUILD_DIR)/noop_shim.so
+CUSTODIAN_SET_MANAGER_SO := $(BUILD_DIR)/custodian_set_manager.so
 
 # Check that required tools are installed
 check-tools:
@@ -140,7 +142,7 @@ clean-ledger: stop-validator
 	@echo "Ledger data cleaned."
 
 # Programs to build
-PROGRAMS := doge-bridge manual-claim pending-mint-buffer txo-buffer generic-buffer noop-shim
+PROGRAMS := doge-bridge manual-claim pending-mint-buffer txo-buffer generic-buffer noop-shim custodian-set-manager
 
 # Build all Solana programs
 # Use SHIM=1 for noopshim feature, SHIM=2 for wormhole feature
@@ -172,6 +174,7 @@ show-program-ids:
 	@echo "Generic Buffer: $$(solana-keygen pubkey $(GENERIC_BUFFER_KEY))"
 	@echo "Manual Claim:   $$(solana-keygen pubkey $(MANUAL_CLAIM_KEY))"
 	@echo "Noop Shim:      $$(solana-keygen pubkey $(NOOP_SHIM_KEY))"
+	@echo "Custodian Set:  $$(solana-keygen pubkey $(CUSTODIAN_SET_MANAGER_KEY))"
 
 # Deploy programs to local validator
 # Use SHIM=1 for noopshim, SHIM=2 for wormhole: make deploy-programs SHIM=1
@@ -196,6 +199,9 @@ deploy-programs:
 	@echo ""
 	@echo "Deploying Noop Shim..."
 	solana program deploy --program-id $(NOOP_SHIM_KEY) $(NOOP_SHIM_SO) --url localhost
+	@echo ""
+	@echo "Deploying Custodian Set Manager..."
+	solana program deploy --program-id $(CUSTODIAN_SET_MANAGER_KEY) $(CUSTODIAN_SET_MANAGER_SO) --url localhost
 	@echo ""
 	@echo "All programs deployed successfully!"
 	@$(MAKE) show-program-ids
@@ -539,6 +545,7 @@ ifdef M
 		--bpf-program $$(solana-keygen pubkey $(GENERIC_BUFFER_KEY)) $(GENERIC_BUFFER_SO) \
 		--bpf-program $$(solana-keygen pubkey $(MANUAL_CLAIM_KEY)) $(MANUAL_CLAIM_SO) \
 		--bpf-program $$(solana-keygen pubkey $(NOOP_SHIM_KEY)) $(NOOP_SHIM_SO) \
+		--bpf-program $$(solana-keygen pubkey $(CUSTODIAN_SET_MANAGER_KEY)) $(CUSTODIAN_SET_MANAGER_SO) \
 		--bpf-program $(MPL_TOKEN_METADATA_ID) $(MPL_TOKEN_METADATA_SO) \
 		--bpf-program $(MPL_BUBBLEGUM_ID) $(MPL_BUBBLEGUM_SO) \
 		--bpf-program $(MPL_CORE_ID) $(MPL_CORE_SO) \
@@ -560,6 +567,7 @@ else
 		--bpf-program $$(solana-keygen pubkey $(GENERIC_BUFFER_KEY)) $(GENERIC_BUFFER_SO) \
 		--bpf-program $$(solana-keygen pubkey $(MANUAL_CLAIM_KEY)) $(MANUAL_CLAIM_SO) \
 		--bpf-program $$(solana-keygen pubkey $(NOOP_SHIM_KEY)) $(NOOP_SHIM_SO) \
+		--bpf-program $$(solana-keygen pubkey $(CUSTODIAN_SET_MANAGER_KEY)) $(CUSTODIAN_SET_MANAGER_SO) \
 		> /dev/null 2>&1 & \
 	echo "Waiting for validator to start (with programs pre-loaded)..."; \
 	sleep 5; \

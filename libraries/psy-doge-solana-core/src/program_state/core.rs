@@ -59,6 +59,8 @@ pub struct PsyBridgeProgramState {
     pub requested_withdrawals_tree: FixedMerkleAppendTree,
 
     pub custodian_wallet_config_hash: QHash256,
+    pub incoming_transition_custodian_config_hash: QHash256,
+    pub last_detected_custodian_transition_seconds: u64, // when we last saw a custodian config transition
     pub bridge_control_mode: u32,
     pub next_recent_finalized_block_index: u32,
     pub last_processed_withdrawals_at_ms: u64,
@@ -68,6 +70,7 @@ pub struct PsyBridgeProgramState {
     pub total_withdrawal_fees_sats: u64,
     pub last_received_block_at_ms: u64,
     pub last_replayed_withdrawal_at_ms: u64,
+    pub total_spent_deposit_utxo_count: u64,
 
     pub config_params: PsyBridgeConfig,
 
@@ -88,6 +91,7 @@ impl PsyBridgeProgramState {
         self.manual_deposits_tree = FixedMerkleAppendTree::new_empty();
         self.requested_withdrawals_tree = FixedMerkleAppendTree::new_empty();
         self.custodian_wallet_config_hash = initialize_instruction.custodian_wallet_config_hash;
+        self.incoming_transition_custodian_config_hash = initialize_instruction.custodian_wallet_config_hash;
         self.bridge_control_mode = 0;
         self.next_recent_finalized_block_index = 0;
         self.last_processed_withdrawals_at_ms = 0;
@@ -132,6 +136,7 @@ impl PsyBridgeProgramState {
         new_return_output: &PsyReturnTxOutput,
         new_spent_txo_tree_root: QHash256,
         new_next_processed_withdrawals_index: u64,
+        new_total_spent_deposit_utxo_count: u64,
     ) -> QHash256 {
         let snapshot_hash = self.withdrawal_snapshot.get_hash();
         let new_return_output_hash = new_return_output.get_hash();
@@ -146,6 +151,8 @@ impl PsyBridgeProgramState {
             &new_spent_txo_tree_root,
             &self.custodian_wallet_config_hash,
             new_next_processed_withdrawals_index,
+            self.total_spent_deposit_utxo_count,
+            new_total_spent_deposit_utxo_count,
         )
     }
     pub fn process_request_withdrawal(

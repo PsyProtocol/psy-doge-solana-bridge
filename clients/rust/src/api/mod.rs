@@ -136,6 +136,8 @@ pub trait WithdrawalApi: Send + Sync {
         new_return_output: PsyReturnTxOutput,
         new_spent_txo_tree_root: [u8; 32],
         new_next_processed_withdrawals_index: u64,
+        new_total_spent_deposit_utxo_count: u64,
+
         doge_tx_bytes: &[u8],
     ) -> Result<Signature, BridgeError>;
 

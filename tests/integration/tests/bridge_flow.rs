@@ -92,12 +92,12 @@ async fn test_bridge_extended_flow() {
     let new_spent_root = [99u8; 32];
     let new_index = bridge_state.core_state.next_processed_withdrawals_index + 1;
 
-    let pub_inputs = bridge_state.core_state.get_expected_public_inputs_for_withdrawal_proof(&new_return_output, new_spent_root, new_index);
+    let pub_inputs = bridge_state.core_state.get_expected_public_inputs_for_withdrawal_proof(&new_return_output, new_spent_root, new_index, 1);
     let proof = generate_withdrawal_fake_proof(pub_inputs);
 
     let fake_wormhole_shim_id = ctx.client.generic_buffer_program_id;
     let fake_wormhole_core_id = ctx.client.generic_buffer_program_id;
-    let process_ix = instructions::process_withdrawal(ctx.program_id, ctx.client.payer.pubkey(), buffer_pk, fake_wormhole_shim_id, fake_wormhole_core_id, proof, new_return_output, new_spent_root, new_index);
+    let process_ix = instructions::process_withdrawal(ctx.program_id, ctx.client.payer.pubkey(), buffer_pk, fake_wormhole_shim_id, fake_wormhole_core_id, proof, new_return_output, new_spent_root, new_index, 1);
     ctx.client.send_tx(&[process_ix], &[]).await;
 
     // Mine Block 4 (Empty) to ensure bridge continues

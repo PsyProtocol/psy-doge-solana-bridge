@@ -70,6 +70,7 @@ pub struct ProcessWithdrawalInstructionData {
     pub new_return_output: PsyReturnTxOutput,
     pub new_spent_txo_tree_root: QHash256,
     pub new_next_processed_withdrawals_index: u64,
+    pub new_total_spent_deposit_utxo_count: u64,
 }
 impl Default for ProcessWithdrawalInstructionData {
     fn default() -> Self {
@@ -78,6 +79,7 @@ impl Default for ProcessWithdrawalInstructionData {
             new_return_output: PsyReturnTxOutput::default(),
             new_spent_txo_tree_root: [0u8; 32],
             new_next_processed_withdrawals_index: 0,
+            new_total_spent_deposit_utxo_count: 0,
         }
     }
 }

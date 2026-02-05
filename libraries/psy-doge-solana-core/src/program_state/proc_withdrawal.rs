@@ -17,6 +17,7 @@ impl PsyBridgeProgramState {
         new_return_output: PsyReturnTxOutput,
         new_spent_txo_tree_root: QHash256,
         new_next_processed_withdrawals_index: u64,
+        new_total_spent_deposit_utxo_count: u64,
     ) -> QDogeResult<QHash256> {
 
         let doge_tx_hash = hash_impl_sha256_bytes(dogecoin_tx);
@@ -27,6 +28,7 @@ impl PsyBridgeProgramState {
             &new_return_output,
             new_spent_txo_tree_root,
             new_next_processed_withdrawals_index,
+            new_total_spent_deposit_utxo_count,
         );
 
         let is_zkp_valid = ZKVerfier::verify_compact_zkp_slice(proof, vk, &expected_public_inputs);

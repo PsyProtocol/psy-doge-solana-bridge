@@ -332,6 +332,7 @@ impl WithdrawalApi for BridgeClient {
         new_return_output: PsyReturnTxOutput,
         new_spent_txo_tree_root: [u8; 32],
         new_next_processed_withdrawals_index: u64,
+        new_total_spent_deposit_utxo_count: u64,
         doge_tx_bytes: &[u8],
     ) -> Result<Signature, BridgeError> {
         self.process_withdrawal_impl(
@@ -339,6 +340,7 @@ impl WithdrawalApi for BridgeClient {
             new_return_output,
             new_spent_txo_tree_root,
             new_next_processed_withdrawals_index,
+            new_total_spent_deposit_utxo_count,
             doge_tx_bytes,
         )
         .await

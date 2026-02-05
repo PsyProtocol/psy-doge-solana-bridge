@@ -184,6 +184,7 @@ pub fn process_withdrawal(
     new_return_output: PsyReturnTxOutput,
     new_spent_txo_tree_root: QHash256,
     new_next_processed_withdrawals_index: u64,
+    new_total_spent_deposit_utxo_count: u64,
 ) -> Instruction {
     let (bridge_state, _) = Pubkey::find_program_address(&[b"bridge_state"], &program_id);
 
@@ -211,6 +212,7 @@ pub fn process_withdrawal(
         new_return_output,
         new_spent_txo_tree_root,
         new_next_processed_withdrawals_index,
+        new_total_spent_deposit_utxo_count,
     };
 
     let data = gen_aligned_instruction(

@@ -16,6 +16,8 @@ pub fn get_withdrawal_proof_public_inputs(
     new_spent_txo_tree_root: &QHash256,
     custodian_wallet_config_hash: &QHash256,
     new_next_processed_withdrawals_index: u64,
+    old_total_spent_deposit_utxo_count: u64,
+    new_total_spent_deposit_utxo_count: u64,
 ) -> QHash256 {
     let return_output_hash_transition =
         hash_impl_sha256_two_to_one_bytes(old_return_output_hash, new_return_output_hash);
@@ -27,7 +29,42 @@ pub fn get_withdrawal_proof_public_inputs(
         &return_output_hash_transition,
         &spent_txo_tree_root_transition,
         &new_next_processed_withdrawals_index.to_le_bytes(),
+        &old_total_spent_deposit_utxo_count.to_le_bytes(),
+        &new_total_spent_deposit_utxo_count.to_le_bytes(),
         custodian_wallet_config_hash,
+    ])
+}
+
+pub fn get_custodian_transition_proof_public_inputs(
+    snapshot_hash: &QHash256,
+    old_return_output_hash: &QHash256,
+    new_return_output_hash: &QHash256,
+    old_spent_txo_tree_root: &QHash256,
+    new_spent_txo_tree_root: &QHash256,
+    old_custodian_wallet_config_hash: &QHash256,
+    new_custodian_wallet_config_hash: &QHash256,
+    new_next_processed_withdrawals_index: u64,
+    old_total_spent_deposit_utxo_count: u64,
+    new_total_spent_deposit_utxo_count: u64,
+) -> QHash256 {
+    let return_output_hash_transition =
+        hash_impl_sha256_two_to_one_bytes(old_return_output_hash, new_return_output_hash);
+    let spent_txo_tree_root_transition =
+        hash_impl_sha256_two_to_one_bytes(old_spent_txo_tree_root, new_spent_txo_tree_root);
+
+    let custodian_wallet_config_hash_transition = hash_impl_sha256_two_to_one_bytes(
+        old_custodian_wallet_config_hash,
+        new_custodian_wallet_config_hash,
+    );
+
+    hashv_impl_sha256_bytes(&[
+        snapshot_hash,
+        &return_output_hash_transition,
+        &spent_txo_tree_root_transition,
+        &new_next_processed_withdrawals_index.to_le_bytes(),
+        &old_total_spent_deposit_utxo_count.to_le_bytes(),
+        &new_total_spent_deposit_utxo_count.to_le_bytes(),
+        &custodian_wallet_config_hash_transition,
     ])
 }
 

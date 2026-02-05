@@ -22,6 +22,13 @@ impl PsyWithdrawalRequest {
         bytes[12..32].copy_from_slice(&self.recipient_address);
         bytes
     }
+    pub fn to_be_leaf(&self) -> [u8; 32] {
+        let mut bytes = [0u8; 32];
+        bytes[0..8].copy_from_slice(&self.amount_sats.to_be_bytes());
+        bytes[8..12].copy_from_slice(&self.address_type.to_be_bytes());
+        bytes[12..32].copy_from_slice(&self.recipient_address);
+        bytes
+    }
     pub fn from_leaf(leaf: &[u8; 32]) -> Self {
         let amount_sats = u64::from_le_bytes(leaf[0..8].try_into().unwrap());
         let address_type = u32::from_le_bytes(leaf[8..12].try_into().unwrap());

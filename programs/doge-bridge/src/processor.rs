@@ -145,6 +145,7 @@ pub fn process_instruction(
                 params.new_return_output,
                 params.new_spent_txo_tree_root,
                 params.new_next_processed_withdrawals_index,
+                params.new_total_spent_deposit_utxo_count,
             )
         }
         DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES => {
@@ -839,6 +840,7 @@ fn process_process_withdrawal(
     new_return_output: PsyReturnTxOutput,
     new_spent_txo_tree_root: psy_bridge_core::common_types::QHash256,
     new_next_processed_withdrawals_index: u64,
+    new_total_spent_deposit_utxo_count: u64,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
 
@@ -896,6 +898,7 @@ fn process_process_withdrawal(
             new_return_output,
             new_spent_txo_tree_root,
             new_next_processed_withdrawals_index,
+            new_total_spent_deposit_utxo_count,
         )?;
 
     let nonce = (bridge_state.core_state.next_processed_withdrawals_index & 0xFFFFFFFF) as u32;

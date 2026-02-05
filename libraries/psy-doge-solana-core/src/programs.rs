@@ -4,3 +4,4 @@ pub const GENERIC_BUFFER_BUILDER_PROGRAM_ID_STR: &str = "GBYLmevzPSBPWfWrJ1h9gNz
 pub const MANUAL_CLAIM_PROGRAM_ID_STR: &str = "MCdYbqiK3uj36tohbMjsh3Ssg8iRSJmSHToNxW8TWWE";
 pub const DOGE_BRIDGE_PROGRAM_ID_STR: &str = "DBjo5tqf2uwt4sg9JznSk9SBbEvsLixknN58y3trwCxJ";
 pub const NOOP_SHIM_PROGRAM_ID_STR: &str = "FwDChsHWLwbhTiYQ4Sum5mjVWswECi9cmrA11GUFUuxi";
+pub const DEV_CUSTODIAN_MANAGER_PROGRAM: &str = "CMsT3coDPqpJc7FEhJwWLuJ11y6b9benPb82pHqpDUWt";
