@@ -32,8 +32,9 @@ use psy_doge_solana_core::instructions::doge_bridge::{
 };
 use psy_doge_solana_core::constants::{
     CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS, CUSTODIAN_TRANSITION_MIN_SOLANA_BUFFER_SECONDS,
-    DEPOSITS_PAUSED_MODE_ACTIVE, DEPOSITS_PAUSED_MODE_PAUSED,
+    DEPOSITS_PAUSED_MODE_ACTIVE, DEPOSITS_PAUSED_MODE_PAUSED, DOGECOIN_CHAIN_ID,
 };
+use delegated_manager_set_types::{ManagerSet, ManagerSetIndex, MANAGER_SET_DATA_SIZE, MANAGER_SET_PREFIX};
 use psy_doge_solana_core::program_state::{FinalizedBlockMintTxoInfo, PsyReturnTxOutput, PsyWithdrawalRequest};
 use solana_program::instruction::{AccountMeta, Instruction};
 use solana_program::program_error::ProgramError;
@@ -1233,8 +1234,14 @@ fn process_snapshot_withdrawals(
 // Custodian Transition Processors
 // ============================================================================
 
-/// Notifies the bridge of a pending custodian config update from the wormhole custodian manager.
+/// Notifies the bridge of a pending custodian config update from the delegated manager set.
 /// This begins the transition grace period.
+///
+/// Accounts:
+///   0. bridge_state        [writable]  Bridge state PDA
+///   1. manager_set_index   [readonly]  PDA: ["manager_set_index", chain_id(BE)]
+///   2. manager_set         [readonly]  PDA: ["manager_set", chain_id(BE), index(BE)]
+///   3. operator            [signer]    Operator pubkey
 fn process_notify_custodian_config_update(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1243,7 +1250,8 @@ fn process_notify_custodian_config_update(
     let account_info_iter = &mut accounts.iter();
 
     let bridge_state_account = next_account_info(account_info_iter)?;
-    let custodian_set_manager_account = next_account_info(account_info_iter)?;
+    let manager_set_index_account = next_account_info(account_info_iter)?;
+    let manager_set_account = next_account_info(account_info_iter)?;
     let operator = next_account_info(account_info_iter)?;
 
     // Verify operator signature
@@ -1271,32 +1279,62 @@ fn process_notify_custodian_config_update(
         return Err(DogeBridgeError::CustodianTransitionAlreadyInProgress.into());
     }
 
-    // Read custodian config from the custodian set manager account
-    // The account data starts with 8 bytes discriminator, then the config
-    let custodian_data = custodian_set_manager_account.try_borrow_data()?;
-    if custodian_data.len() < 8 + std::mem::size_of::<psy_bridge_core::custodian_config::RemoteMultisigCustodianConfig>() {
+    // Verify ManagerSetIndex PDA
+    let (expected_msi_pda, _) = ManagerSetIndex::pda(DOGECOIN_CHAIN_ID);
+    if manager_set_index_account.key != &expected_msi_pda {
+        msg!("Invalid ManagerSetIndex PDA");
+        return Err(BridgeError::InvalidPDA.into());
+    }
+
+    // Deserialize ManagerSetIndex
+    let msi = ManagerSetIndex::deserialize(manager_set_index_account)?;
+    if msi.manager_chain_id != DOGECOIN_CHAIN_ID {
+        msg!("ManagerSetIndex chain_id mismatch: expected {}, got {}", DOGECOIN_CHAIN_ID, msi.manager_chain_id);
         return Err(BridgeError::InvalidAccountInput.into());
     }
 
-    // Extract the RemoteMultisigCustodianConfig (after 8-byte discriminator + 32-byte operator pubkey)
-    let config_offset = 8 + 32; // discriminator + operator pubkey
-    let config_end = config_offset + std::mem::size_of::<psy_bridge_core::custodian_config::RemoteMultisigCustodianConfig>();
-    if custodian_data.len() < config_end {
+    // Verify ManagerSet PDA using current index from ManagerSetIndex
+    let (expected_ms_pda, _) = ManagerSet::pda(DOGECOIN_CHAIN_ID, msi.current_index);
+    if manager_set_account.key != &expected_ms_pda {
+        msg!("Invalid ManagerSet PDA");
+        return Err(BridgeError::InvalidPDA.into());
+    }
+
+    // Deserialize ManagerSet
+    let ms = ManagerSet::deserialize(manager_set_account)?;
+    if ms.manager_chain_id != DOGECOIN_CHAIN_ID {
+        msg!("ManagerSet chain_id mismatch");
+        return Err(BridgeError::InvalidAccountInput.into());
+    }
+    if ms.index != msi.current_index {
+        msg!("ManagerSet index mismatch");
         return Err(BridgeError::InvalidAccountInput.into());
     }
 
-    let remote_config: &psy_bridge_core::custodian_config::RemoteMultisigCustodianConfig =
-        bytemuck::from_bytes(&custodian_data[config_offset..config_end]);
+    // Validate manager_set data format (3-byte prefix + 7 * 33-byte compressed keys = 234 bytes)
+    if ms.manager_set.len() != MANAGER_SET_DATA_SIZE {
+        msg!("Invalid manager_set length: expected {}, got {}", MANAGER_SET_DATA_SIZE, ms.manager_set.len());
+        return Err(BridgeError::InvalidAccountInput.into());
+    }
+    if ms.manager_set[..3] != MANAGER_SET_PREFIX {
+        msg!("Invalid manager_set prefix");
+        return Err(BridgeError::InvalidAccountInput.into());
+    }
 
-    // Compute the full custodian config hash using the bridge PDA as emitter
-    // Network type is stored somewhere or we use a constant - using 0 for now
-    let full_config = psy_bridge_core::custodian_config::FullMultisigCustodianConfig {
-        emitter_pubkey: bridge_pda.to_bytes(),
-        signer_public_keys: remote_config.signer_public_keys,
-        custodian_config_id: remote_config.custodian_config_id,
-        signer_public_keys_y_parity: remote_config.signer_public_keys_y_parity as u16,
-        network_type: 0, // TODO: Get from config or constant
-    };
+    // Extract compressed public keys (skip 3-byte prefix)
+    let compressed_keys = &ms.manager_set[3..];
+
+    // Build FullMultisigCustodianConfig using from_compressed_public_keys_buf
+    // Use the ManagerSet.index as the custodian_config_id
+    let full_config = psy_bridge_core::custodian_config::FullMultisigCustodianConfig::from_compressed_public_keys_buf(
+        bridge_pda.to_bytes(),
+        compressed_keys,
+        ms.index,
+        0, // network_type: 0 for mainnet
+    ).map_err(|_| {
+        msg!("Failed to parse compressed public keys");
+        BridgeError::InvalidAccountInput
+    })?;
     let computed_hash = full_config.get_wallet_config_hash();
 
     // Verify the computed hash matches the expected hash

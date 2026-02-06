@@ -1,5 +1,8 @@
 pub const PSY_DOGE_BRIDGE_MAX_REORG_BLOCKS: usize = 10;
 
+/// Dogecoin chain ID per Wormhole standard
+pub const DOGECOIN_CHAIN_ID: u16 = 65;
+
 // Custodian Transition Constants
 pub const CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS: u32 = 2 * 60 * 60; // 2 hours
 pub const CUSTODIAN_TRANSITION_MIN_SOLANA_BUFFER_SECONDS: u32 = 10 * 60; // 10 minutes

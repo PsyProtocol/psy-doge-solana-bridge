@@ -38,6 +38,7 @@ tracing = "0.1"
 # Local libraries
 psy-bridge-core = { path = "../../libraries/psy-bridge-core", features = ["std", "serialize_bytemuck", "sha2"], default-features = false }
 psy-doge-solana-core = { path = "../../libraries/psy-doge-solana-core", features = ["std", "serialize_bytemuck", "fake_signer"], default-features = false }
+delegated-manager-set-types = { path = "../../libraries/delegated-manager-set-types" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

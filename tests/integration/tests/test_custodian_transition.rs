@@ -12,6 +12,8 @@ use psy_doge_solana_core::{
 use solana_program_test::tokio;
 use solana_sdk::{program_pack::Pack, signature::Signer};
 
+// Re-export for convenience in tests
+
 fn create_default_config() -> (InitializeBridgeParams, [u8; 32]) {
     let config_params = PsyBridgeConfig {
         deposit_fee_rate_numerator: 2,
@@ -57,12 +59,12 @@ async fn test_custodian_transition_notify_and_cancel() {
     );
     ctx.client.send_tx(&[init_ix], &[]).await;
 
-    // Create a mock custodian set manager account with proper data
-    let (custodian_set_manager, new_custodian_hash) = ctx.create_mock_custodian_set_manager(1);
+    // Create mock manager set accounts (ManagerSetIndex + ManagerSet)
+    let (manager_set_index, manager_set, new_custodian_hash) = ctx.create_mock_manager_set(1);
 
     // Notify custodian config update
     let mut client = ctx.client.clone();
-    client.notify_custodian_config_update(custodian_set_manager, new_custodian_hash).await;
+    client.notify_custodian_config_update(manager_set_index, manager_set, new_custodian_hash).await;
 
     // Verify the transition is pending
     let bridge_account = client.client.get_account(client.bridge_state_pda).await.unwrap().unwrap();
@@ -107,15 +109,15 @@ async fn test_custodian_transition_deposits_allowed_during_grace_period() {
     );
     ctx.client.send_tx(&[init_ix], &[]).await;
 
-    // Create a mock custodian set manager account with proper data
-    let (custodian_set_manager, new_custodian_hash) = ctx.create_mock_custodian_set_manager(1);
+    // Create mock manager set accounts (ManagerSetIndex + ManagerSet)
+    let (manager_set_index, manager_set, new_custodian_hash) = ctx.create_mock_manager_set(1);
 
     let mut helper = BlockTransitionHelper::new_from_client(ctx.client.clone())
         .await
         .unwrap();
 
     // Notify custodian config update
-    helper.client.notify_custodian_config_update(custodian_set_manager, new_custodian_hash).await;
+    helper.client.notify_custodian_config_update(manager_set_index, manager_set, new_custodian_hash).await;
 
     // During grace period, deposits should still be allowed
     let u1 = helper.add_user();
@@ -160,12 +162,12 @@ async fn test_custodian_transition_state_values() {
     assert_eq!(bridge_state.core_state.incoming_transition_custodian_config_hash, [0u8; 32]);
     assert_eq!(bridge_state.core_state.deposits_paused_mode, DEPOSITS_PAUSED_MODE_ACTIVE);
 
-    // Create a mock custodian set manager account with proper data
-    let (custodian_set_manager, new_custodian_hash) = ctx.create_mock_custodian_set_manager(1);
+    // Create mock manager set accounts (ManagerSetIndex + ManagerSet)
+    let (manager_set_index, manager_set, new_custodian_hash) = ctx.create_mock_manager_set(1);
 
     // Notify custodian config update
     let mut client = ctx.client.clone();
-    client.notify_custodian_config_update(custodian_set_manager, new_custodian_hash).await;
+    client.notify_custodian_config_update(manager_set_index, manager_set, new_custodian_hash).await;
 
     // Verify transition pending state
     let bridge_account = client.client.get_account(client.bridge_state_pda).await.unwrap().unwrap();

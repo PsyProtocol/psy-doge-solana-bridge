@@ -21,6 +21,7 @@ psy-bridge-core = { path = "../libraries/psy-bridge-core", features = ["serializ
 psy-doge-solana-core = { path = "../libraries/psy-doge-solana-core", features = ["serialize_bytemuck", "serialize_serde", "fake_signer"] }
 doge-bridge-client = { path = "../clients/rust" }
 doge-bridge-test-utils = { path = "../tests/test-utils" }
+delegated-manager-set-types = { path = "../libraries/delegated-manager-set-types" }
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }

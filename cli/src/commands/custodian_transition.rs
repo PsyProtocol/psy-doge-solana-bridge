@@ -1,26 +1,26 @@
 use anyhow::{Context, Result};
 use clap::Args;
+use delegated_manager_set_types::{ManagerSet, ManagerSetIndex, DOGECOIN_CHAIN_ID};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{read_keypair_file, Signer},
 };
 use std::path::PathBuf;
-use std::str::FromStr;
 
-use doge_bridge_client::instructions;
 use doge_bridge_client::constants::DOGE_BRIDGE_PROGRAM_ID;
+use doge_bridge_client::instructions;
 use psy_doge_solana_core::constants::{
-    CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS,
-    DEPOSITS_PAUSED_MODE_ACTIVE, DEPOSITS_PAUSED_MODE_PAUSED,
+    CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS, DEPOSITS_PAUSED_MODE_ACTIVE,
+    DEPOSITS_PAUSED_MODE_PAUSED,
 };
 
 /// Arguments for the notify-custodian-update command
 #[derive(Args, Debug)]
 pub struct NotifyCustodianUpdateArgs {
-    /// Pubkey of the custodian set manager account
+    /// Manager set index to use (if not provided, uses current index from on-chain data)
     #[arg(long)]
-    pub custodian_account: String,
+    pub manager_set_index: Option<u32>,
 
     /// Expected new custodian config hash (hex string)
     #[arg(long)]
@@ -72,29 +72,54 @@ pub fn execute_notify_custodian_update(
     let payer = keypair_path
         .map(|p| read_keypair_file(&p))
         .transpose()
-        .map_err(|e| anyhow::anyhow!("{:?}",e))
+        .map_err(|e| anyhow::anyhow!("{:?}", e))
         .context("Failed to read payer keypair")?
         .unwrap_or_else(|| {
             read_keypair_file(&shellexpand::tilde("~/.config/solana/id.json").to_string())
                 .expect("Failed to read default keypair")
         });
 
-    let operator = read_keypair_file(&args.operator_keypair).map_err(|e| anyhow::anyhow!("{:?}",e))
+    let operator = read_keypair_file(&args.operator_keypair)
+        .map_err(|e| anyhow::anyhow!("{:?}", e))
         .context("Failed to read operator keypair")?;
-
-    let custodian_account = Pubkey::from_str(&args.custodian_account)
-        .context("Invalid custodian account pubkey")?;
 
     let config_hash = parse_hex_hash(&args.config_hash)?;
 
+    // Derive ManagerSetIndex PDA
+    let (manager_set_index_pda, _) = ManagerSetIndex::pda(DOGECOIN_CHAIN_ID);
+
+    // Get the current index from on-chain data if not provided
+    let set_index = match args.manager_set_index {
+        Some(idx) => idx,
+        None => {
+            // Fetch the current index from the ManagerSetIndex account
+            let msi_data = client.get_account_data(&manager_set_index_pda)
+                .context("Failed to fetch ManagerSetIndex account. Make sure the delegated-manager-set program is deployed and initialized.")?;
+
+            // Parse the index from the account data (skip 8-byte discriminator)
+            if msi_data.len() < 14 {
+                anyhow::bail!("ManagerSetIndex account data too small");
+            }
+            // Layout: [disc:8][chain_id:2][current_index:4]
+            let index_bytes: [u8; 4] = msi_data[10..14].try_into().unwrap();
+            u32::from_le_bytes(index_bytes)
+        }
+    };
+
+    // Derive ManagerSet PDA using the set index
+    let (manager_set_pda, _) = ManagerSet::pda(DOGECOIN_CHAIN_ID, set_index);
+
     println!("Notifying custodian config update...");
-    println!("  Custodian account: {}", custodian_account);
+    println!("  Manager Set Index PDA: {}", manager_set_index_pda);
+    println!("  Manager Set PDA: {}", manager_set_pda);
+    println!("  Set Index: {}", set_index);
     println!("  Config hash: 0x{}", hex::encode(config_hash));
 
     let ix = instructions::notify_custodian_config_update(
         DOGE_BRIDGE_PROGRAM_ID,
         operator.pubkey(),
-        custodian_account,
+        manager_set_index_pda,
+        manager_set_pda,
         config_hash,
     );
 
@@ -108,7 +133,10 @@ pub fn execute_notify_custodian_update(
 
     let sig = client.send_and_confirm_transaction(&tx)?;
     println!("Transaction confirmed: {}", sig);
-    println!("Grace period started. Deposits can be paused after {} seconds.", CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS);
+    println!(
+        "Grace period started. Deposits can be paused after {} seconds.",
+        CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS
+    );
 
     Ok(())
 }
@@ -123,7 +151,7 @@ pub fn execute_pause_for_transition(
     let payer = keypair_path
         .map(|p| read_keypair_file(&p))
         .transpose()
-        .map_err(|e| anyhow::anyhow!("{:?}",e))
+        .map_err(|e| anyhow::anyhow!("{:?}", e))
         .context("Failed to read payer keypair")?
         .unwrap_or_else(|| {
             read_keypair_file(&shellexpand::tilde("~/.config/solana/id.json").to_string())
@@ -131,15 +159,12 @@ pub fn execute_pause_for_transition(
         });
 
     let operator = read_keypair_file(&args.operator_keypair)
-        .map_err(|e| anyhow::anyhow!("{:?}",e))
+        .map_err(|e| anyhow::anyhow!("{:?}", e))
         .context("Failed to read operator keypair")?;
 
     println!("Pausing deposits for custodian transition...");
 
-    let ix = instructions::pause_deposits_for_transition(
-        DOGE_BRIDGE_PROGRAM_ID,
-        operator.pubkey(),
-    );
+    let ix = instructions::pause_deposits_for_transition(DOGE_BRIDGE_PROGRAM_ID, operator.pubkey());
 
     let recent_blockhash = client.get_latest_blockhash()?;
     let tx = solana_sdk::transaction::Transaction::new_signed_with_payer(
@@ -166,7 +191,7 @@ pub fn execute_cancel_transition(
     let payer = keypair_path
         .map(|p| read_keypair_file(&p))
         .transpose()
-        .map_err(|e| anyhow::anyhow!("{:?}",e))
+        .map_err(|e| anyhow::anyhow!("{:?}", e))
         .context("Failed to read payer keypair")?
         .unwrap_or_else(|| {
             read_keypair_file(&shellexpand::tilde("~/.config/solana/id.json").to_string())
@@ -174,15 +199,12 @@ pub fn execute_cancel_transition(
         });
 
     let operator = read_keypair_file(&args.operator_keypair)
-        .map_err(|e| anyhow::anyhow!("{:?}",e))
+        .map_err(|e| anyhow::anyhow!("{:?}", e))
         .context("Failed to read operator keypair")?;
 
     println!("Cancelling custodian transition...");
 
-    let ix = instructions::cancel_custodian_transition(
-        DOGE_BRIDGE_PROGRAM_ID,
-        operator.pubkey(),
-    );
+    let ix = instructions::cancel_custodian_transition(DOGE_BRIDGE_PROGRAM_ID, operator.pubkey());
 
     let recent_blockhash = client.get_latest_blockhash()?;
     let tx = solana_sdk::transaction::Transaction::new_signed_with_payer(
@@ -199,18 +221,17 @@ pub fn execute_cancel_transition(
     Ok(())
 }
 
-pub fn execute_transition_status(
-    rpc_url: &str,
-    _args: TransitionStatusArgs,
-) -> Result<()> {
+pub fn execute_transition_status(rpc_url: &str, _args: TransitionStatusArgs) -> Result<()> {
     let client = RpcClient::new(rpc_url.to_string());
 
-    let (bridge_state_pda, _) = Pubkey::find_program_address(&[b"bridge_state"], &DOGE_BRIDGE_PROGRAM_ID);
+    let (bridge_state_pda, _) =
+        Pubkey::find_program_address(&[b"bridge_state"], &DOGE_BRIDGE_PROGRAM_ID);
 
     println!("Fetching custodian transition status...");
     println!("  Bridge state: {}", bridge_state_pda);
 
-    let account_data = client.get_account_data(&bridge_state_pda)
+    let account_data = client
+        .get_account_data(&bridge_state_pda)
         .context("Failed to fetch bridge state account")?;
 
     // Parse the BridgeState from account data
@@ -220,7 +241,11 @@ pub fn execute_transition_status(
     }
 
     let core_state: &psy_doge_solana_core::program_state::PsyBridgeProgramState =
-        bytemuck::from_bytes(&account_data[32..32 + std::mem::size_of::<psy_doge_solana_core::program_state::PsyBridgeProgramState>()]);
+        bytemuck::from_bytes(
+            &account_data[32..32
+                + std::mem::size_of::<psy_doge_solana_core::program_state::PsyBridgeProgramState>(
+                )],
+        );
 
     let deposits_paused_mode = core_state.deposits_paused_mode;
     let last_detected = core_state.last_detected_custodian_transition_seconds;
@@ -228,14 +253,23 @@ pub fn execute_transition_status(
     let current_hash = core_state.custodian_wallet_config_hash;
 
     println!("\nCustodian Transition Status:");
-    println!("  Current custodian config hash: 0x{}", hex::encode(current_hash));
-    println!("  Incoming custodian config hash: 0x{}", hex::encode(incoming_hash));
+    println!(
+        "  Current custodian config hash: 0x{}",
+        hex::encode(current_hash)
+    );
+    println!(
+        "  Incoming custodian config hash: 0x{}",
+        hex::encode(incoming_hash)
+    );
     println!("  Last detected transition (unix): {}", last_detected);
-    println!("  Deposits paused mode: {}", match deposits_paused_mode {
-        DEPOSITS_PAUSED_MODE_ACTIVE => "Active (deposits allowed)",
-        DEPOSITS_PAUSED_MODE_PAUSED => "Paused (consolidation in progress)",
-        _ => "Unknown",
-    });
+    println!(
+        "  Deposits paused mode: {}",
+        match deposits_paused_mode {
+            DEPOSITS_PAUSED_MODE_ACTIVE => "Active (deposits allowed)",
+            DEPOSITS_PAUSED_MODE_PAUSED => "Paused (consolidation in progress)",
+            _ => "Unknown",
+        }
+    );
 
     if last_detected > 0 {
         let grace_period_ends = last_detected + CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS;
@@ -246,14 +280,23 @@ pub fn execute_transition_status(
         } else {
             println!("\nStatus: CONSOLIDATING - UTXOs being consolidated to new custodian");
 
-            let auto_claimed = core_state.bridge_header.finalized_state.auto_claimed_deposits_next_index as u64;
+            let auto_claimed = core_state
+                .bridge_header
+                .finalized_state
+                .auto_claimed_deposits_next_index as u64;
             let manual_deposits = core_state.manual_deposits_tree.next_index as u64;
             let total_target = auto_claimed + manual_deposits;
             let spent = core_state.total_spent_deposit_utxo_count;
 
-            println!("  Consolidation target: {} (auto: {}, manual: {})", total_target, auto_claimed, manual_deposits);
+            println!(
+                "  Consolidation target: {} (auto: {}, manual: {})",
+                total_target, auto_claimed, manual_deposits
+            );
             println!("  Currently spent: {}", spent);
-            println!("  Progress: {:.1}%", (spent as f64 / total_target as f64) * 100.0);
+            println!(
+                "  Progress: {:.1}%",
+                (spent as f64 / total_target as f64) * 100.0
+            );
         }
     } else {
         println!("\nStatus: NONE - no transition in progress");

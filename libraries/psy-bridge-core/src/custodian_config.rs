@@ -132,6 +132,63 @@ impl FullMultisigCustodianConfig {
             emitter_pubkey,
         })
     }
+    pub fn from_compressed_public_keys_refs(
+        emitter_pubkey: [u8; 32],
+        compressed_public_keys: &[&[u8; 33]],
+        custodian_config_id: u32,
+        network_type: u16,
+    ) -> anyhow::Result<Self> {
+        if compressed_public_keys.len() != 7 {
+            return Err(anyhow::anyhow!(
+                "FullMultisigCustodianConfig requires exactly 7 public keys"
+            ));
+        }
+        let mut public_keys: [[u8; 32]; 7] = [[0u8; 32]; 7];
+        let mut signer_public_keys_y_parity = 0u16;
+        for (i, compressed_key) in compressed_public_keys.iter().enumerate() {
+            let y_parity = compressed_key[0];
+            if y_parity == 0x03 {
+                signer_public_keys_y_parity |= 1 << i;
+            }
+            public_keys[i].copy_from_slice(&compressed_key[1..33]);
+        }
+        Ok(Self {
+            signer_public_keys: public_keys,
+            signer_public_keys_y_parity,
+            custodian_config_id,
+            network_type,
+            emitter_pubkey,
+        })
+    }
+    pub fn from_compressed_public_keys_buf(
+        emitter_pubkey: [u8; 32],
+        compressed_public_keys: &[u8],
+        custodian_config_id: u32,
+        network_type: u16,
+    ) -> anyhow::Result<Self> {
+        if compressed_public_keys.len() != 7 * 33{
+            return Err(anyhow::anyhow!(
+                "FullMultisigCustodianConfig requires exactly 7 public keys"
+            ));
+        }
+        let mut public_keys: [[u8; 32]; 7] = [[0u8; 32]; 7];
+        let mut signer_public_keys_y_parity = 0u16;
+        for i in 0..7 {
+            let start_index = i * 33;
+            let y_parity = compressed_public_keys[start_index];
+            if y_parity == 0x03 {
+                signer_public_keys_y_parity |= 1 << i;
+            }
+            public_keys[i].copy_from_slice(&compressed_public_keys[start_index + 1..start_index + 33]);
+        }
+        Ok(Self {
+            signer_public_keys: public_keys,
+            signer_public_keys_y_parity,
+            custodian_config_id,
+            network_type,
+            emitter_pubkey,
+        })
+    }
     pub fn to_compressed_public_keys(&self) -> [[u8; 33]; 7] {
         let mut compressed_keys: [[u8; 33]; 7] = [[0u8; 33]; 7];
         for (i, public_key) in self.signer_public_keys.iter().enumerate() {

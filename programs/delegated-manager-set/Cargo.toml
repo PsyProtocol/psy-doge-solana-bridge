@@ -1,0 +1,17 @@
+[package]
+name = "delegated-manager-set"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+no-entrypoint = []
+custom-panic = []
+custom-heap = []
+
+[dependencies]
+solana-program = { workspace = true }
+borsh = { workspace = true }
+delegated-manager-set-types = { path = "../../libraries/delegated-manager-set-types" }

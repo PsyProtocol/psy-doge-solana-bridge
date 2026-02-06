@@ -26,3 +26,4 @@ spl-token = { workspace = true, features = ["no-entrypoint"] }
 
 psy-bridge-core = { path = "../../libraries/psy-bridge-core", default-features = false,  features = ["serialize_borsh", "serialize_bytemuck"] }
 psy-doge-solana-core = { path = "../../libraries/psy-doge-solana-core", default-features = false, features = ["serialize_borsh", "serialize_bytemuck"] }
+delegated-manager-set-types = { path = "../../libraries/delegated-manager-set-types" }

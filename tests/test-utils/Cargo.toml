@@ -24,6 +24,9 @@ txo-buffer = { path = "../../programs/txo-buffer", features = ["no-entrypoint"],
 generic-buffer = { path = "../../programs/generic-buffer", features = ["no-entrypoint"], default-features = false }
 manual-claim = { path = "../../programs/manual-claim", features = ["no-entrypoint"] }
 noop-shim = { path = "../../programs/noop-shim", features = ["no-entrypoint"] }
+delegated-manager-set = { path = "../../programs/delegated-manager-set", features = ["no-entrypoint"] }
+delegated-manager-set-types = { path = "../../libraries/delegated-manager-set-types" }
+borsh = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }
 rand_core = { workspace = true }

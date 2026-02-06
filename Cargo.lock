@@ -1297,6 +1297,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
+name = "delegated-manager-set"
+version = "0.1.0"
+dependencies = [
+ "borsh 0.10.4",
+ "delegated-manager-set-types",
+ "solana-program",
+]
+
+[[package]]
+name = "delegated-manager-set-types"
+version = "0.1.0"
+dependencies = [
+ "borsh 0.10.4",
+ "solana-program",
+]
+
+[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1444,6 +1461,7 @@ version = "0.1.0"
 dependencies = [
  "borsh 0.10.4",
  "bytemuck",
+ "delegated-manager-set-types",
  "psy-bridge-core",
  "psy-doge-solana-core",
  "solana-program",
@@ -1458,6 +1476,7 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "clap",
+ "delegated-manager-set-types",
  "dirs",
  "doge-bridge-client",
  "doge-bridge-test-utils",
@@ -1485,6 +1504,7 @@ dependencies = [
  "bincode",
  "borsh 0.10.4",
  "bytemuck",
+ "delegated-manager-set-types",
  "futures",
  "governor",
  "hex",
@@ -1550,7 +1570,10 @@ name = "doge-bridge-test-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "borsh 0.10.4",
  "bytemuck",
+ "delegated-manager-set",
+ "delegated-manager-set-types",
  "doge-bridge",
  "doge-bridge-client",
  "generic-buffer",

@@ -173,15 +173,22 @@ impl DogeBridgeClient {
 
     /// Notifies the bridge of a pending custodian config update.
     /// This begins the 2-hour grace period for the transition.
+    ///
+    /// Arguments:
+    /// - `manager_set_index`: PDA for ManagerSetIndex (["manager_set_index", chain_id(BE)])
+    /// - `manager_set`: PDA for ManagerSet (["manager_set", chain_id(BE), index(BE)])
+    /// - `expected_new_custodian_config_hash`: Expected hash of the new custodian config
     pub async fn notify_custodian_config_update(
         &self,
-        custodian_set_manager_account: Pubkey,
+        manager_set_index: Pubkey,
+        manager_set: Pubkey,
         expected_new_custodian_config_hash: [u8; 32],
     ) -> Result<(), ClientError> {
         let ix = instructions::notify_custodian_config_update(
             self.program_id,
             self.operator.pubkey(),
-            custodian_set_manager_account,
+            manager_set_index,
+            manager_set,
             expected_new_custodian_config_hash,
         );
         self.buffer_manager()

@@ -679,10 +679,17 @@ pub fn snapshot_withdrawals(
 // ============================================================================
 
 /// Creates an instruction to notify the bridge of a custodian config update.
+///
+/// Accounts:
+///   0. bridge_state        [writable]  Bridge state PDA
+///   1. manager_set_index   [readonly]  PDA: ["manager_set_index", chain_id(BE)]
+///   2. manager_set         [readonly]  PDA: ["manager_set", chain_id(BE), index(BE)]
+///   3. operator            [signer]    Operator pubkey
 pub fn notify_custodian_config_update(
     program_id: Pubkey,
     operator: Pubkey,
-    custodian_set_manager_account: Pubkey,
+    manager_set_index: Pubkey,
+    manager_set: Pubkey,
     expected_new_custodian_config_hash: QHash256,
 ) -> Instruction {
     let (bridge_state, _) = Pubkey::find_program_address(&[b"bridge_state"], &program_id);
@@ -700,7 +707,8 @@ pub fn notify_custodian_config_update(
         program_id,
         accounts: vec![
             AccountMeta::new(bridge_state, false),
-            AccountMeta::new_readonly(custodian_set_manager_account, false),
+            AccountMeta::new_readonly(manager_set_index, false),
+            AccountMeta::new_readonly(manager_set, false),
             AccountMeta::new_readonly(operator, true),
         ],
         data,
