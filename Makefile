@@ -3,7 +3,7 @@
 
 .PHONY: help check-tools start-validator stop-validator build-programs deploy-programs \
         run-local-tests run-history-tests run-client-tests clean-ledger setup-and-test dev-test show-program-ids \
-        build-cli init-bridge create-users setup-user-atas setup-bridge setup-bridge-clean setup-dev-env \
+        build-cli init-bridge init-delegated-manager create-users setup-user-atas setup-bridge setup-bridge-clean setup-dev-env \
         setup-dev-env-fast setup-metaplex-programs test-custodian-transition run-custodian-tests
 
 # Metaplex program paths for local validator
@@ -42,6 +42,7 @@ help:
 	@echo ""
 	@echo "Bridge Setup:"
 	@echo "  init-bridge          - Initialize bridge from ./bridge-config/doge_config.json"
+	@echo "  init-delegated-manager - Initialize delegated manager set from ./bridge-config/custodian_config.yaml"
 	@echo "  create-users         - Create 3 test user accounts with DOGE ATAs"
 	@echo "  setup-user-atas      - Create ATAs for existing users and set close authority to null"
 	@echo "  setup-bridge         - Full bridge setup: init-bridge + create-users"
@@ -272,6 +273,7 @@ airdrop:
 # Bridge config paths
 BRIDGE_CONFIG_DIR := bridge-config
 DOGE_CONFIG := $(BRIDGE_CONFIG_DIR)/doge_config.json
+CUSTODIAN_CONFIG := $(BRIDGE_CONFIG_DIR)/custodian_config.yaml
 BRIDGE_KEYS_DIR := $(BRIDGE_CONFIG_DIR)/keys
 BRIDGE_USERS_DIR := $(BRIDGE_CONFIG_DIR)/users
 CLI_BIN := target/debug/doge-bridge-cli
@@ -303,6 +305,20 @@ init-bridge: build-cli
 		--yes
 	@echo ""
 	@echo "=== Bridge Initialized ==="
+
+# Initialize the delegated manager set from custodian_config.yaml
+init-delegated-manager: build-cli
+	@echo "=== Initializing Delegated Manager Set ==="
+	@if [ ! -f "$(CUSTODIAN_CONFIG)" ]; then \
+		echo "ERROR: $(CUSTODIAN_CONFIG) not found!"; \
+		echo "Please create the custodian config file first."; \
+		exit 1; \
+	fi
+	$(CLI_BIN) --rpc-url http://127.0.0.1:8899 \
+		init-delegated-manager \
+		--config $(CUSTODIAN_CONFIG)
+	@echo ""
+	@echo "=== Delegated Manager Set Initialized ==="
 
 # Create test user accounts with DOGE ATAs
 create-users: build-cli
@@ -487,6 +503,8 @@ endif
 	@echo ""
 	@$(MAKE) init-bridge
 	@echo ""
+	@$(MAKE) init-delegated-manager
+	@echo ""
 	@echo "=== Airdropping SOL to Keys ==="
 	@if [ -f "$(BRIDGE_KEYS_DIR)/payer.json" ]; then \
 		echo "Airdropping to payer..."; \
@@ -599,6 +617,8 @@ endif
 	@solana airdrop 500 --url localhost 2>/dev/null || true
 	@echo ""
 	@$(MAKE) init-bridge
+	@echo ""
+	@$(MAKE) init-delegated-manager
 	@echo ""
 	@echo "=== Airdropping SOL to Keys ==="
 	@if [ -f "$(BRIDGE_KEYS_DIR)/payer.json" ]; then \

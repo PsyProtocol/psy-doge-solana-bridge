@@ -57,7 +57,8 @@ pub mod bridge_client;
 pub mod buffer_manager;
 
 // Re-exports for convenient access
-pub use api::{BridgeApi, ManualClaimApi, OperatorApi, WithdrawalApi};
+pub use api::{BridgeApi, DelegatedManagerApi, DelegatedManagerState, ManualClaimApi, OperatorApi, WithdrawalApi};
+pub use delegated_manager_set_types::{ManagerSet, ManagerSetIndex, DOGECOIN_CHAIN_ID};
 pub use client::BridgeClient;
 pub use config::{
     BridgeClientConfig, BridgeClientConfigBuilder, ParallelismConfig, RateLimitConfig, RetryConfig,

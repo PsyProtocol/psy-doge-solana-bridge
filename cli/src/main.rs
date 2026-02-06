@@ -13,9 +13,11 @@ use commands::{
         CancelTransitionArgs, TransitionStatusArgs,
     },
     generate_keys::GenerateKeysArgs,
+    init_delegated_manager::InitDelegatedManagerArgs,
     initialize::InitializeBridgeArgs,
     initialize_from_doge::InitializeFromDogeArgs,
     setup_user_atas::SetupUserAtasArgs,
+    update_delegated_manager::UpdateDelegatedManagerArgs,
 };
 
 #[derive(Parser)]
@@ -66,6 +68,12 @@ enum Commands {
 
     /// Query the current custodian transition status
     TransitionStatus(TransitionStatusArgs),
+
+    /// Initialize the delegated manager set from a YAML config file
+    InitDelegatedManager(InitDelegatedManagerArgs),
+
+    /// Update the delegated manager set to a new custodian set index
+    UpdateDelegatedManager(UpdateDelegatedManagerArgs),
 }
 
 fn main() -> Result<()> {
@@ -82,5 +90,7 @@ fn main() -> Result<()> {
         Commands::PauseForTransition(args) => commands::custodian_transition::execute_pause_for_transition(&cli.rpc_url, cli.keypair, args),
         Commands::CancelTransition(args) => commands::custodian_transition::execute_cancel_transition(&cli.rpc_url, cli.keypair, args),
         Commands::TransitionStatus(args) => commands::custodian_transition::execute_transition_status(&cli.rpc_url, args),
+        Commands::InitDelegatedManager(args) => commands::init_delegated_manager::execute(&cli.rpc_url, cli.keypair, args),
+        Commands::UpdateDelegatedManager(args) => commands::update_delegated_manager::execute(&cli.rpc_url, cli.keypair, args),
     }
 }

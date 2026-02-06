@@ -1,0 +1,12 @@
+# Custodian wallet public keys for the delegated manager set
+# These are SEC1 compressed secp256k1 public keys (33 bytes, hex-encoded)
+# Used to initialize the delegated-manager-set program for Dogecoin (chain ID 65)
+
+custodian_wallet_public_keys:
+  - "02d78ca20440672cd9dc38824e057fa90fe807c79bb89394a843827b9431bb4d4f"
+  - "0295e9c31f4a7883780ea8c6a0e7098dc1832af65f1406c54da2b9f631e4443af4"
+  - "0350ec1f931cc74d98bf718412339a8d9c7f851e31abca72aae153d3cda7449f4a"
+  - "03d6e3ed3d99b987df6a6f47739174a5df216c6c50f015ffeae76585428498ed21"
+  - "02bf653b4335e3989fd29ffb18f5167074034f56349f47256c480afc68a4535ba9"
+  - "028d873ccec881c28468e1d8a2368217ef6e399bc5b6f95e08374564ea1c7392f1"
+  - "0218338d00c4055662422fc55c0fa43f403e1bffc5b91a2b357c7cd8822aa66958"

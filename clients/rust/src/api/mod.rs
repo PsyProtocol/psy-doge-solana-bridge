@@ -5,10 +5,13 @@
 
 pub mod blocks;
 pub mod buffers;
+pub mod delegated_manager;
 pub mod deposits;
 pub mod mints;
 pub mod state;
 pub mod withdrawals;
+
+pub use delegated_manager::{DelegatedManagerApi, DelegatedManagerState};
 
 use async_trait::async_trait;
 use solana_sdk::{pubkey::Pubkey, signature::{Keypair, Signature}};
