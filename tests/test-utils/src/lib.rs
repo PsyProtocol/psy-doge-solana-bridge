@@ -15,6 +15,7 @@ use solana_program_test::{processor, ProgramTest, ProgramTestContext};
 use txo_buffer::process_instruction as txo_buffer_processor;
 
 use solana_sdk::{
+    account::Account,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_instruction,
@@ -101,5 +102,28 @@ impl BridgeTestContext {
             doge_mint: doge_mint.pubkey(),
             client: test_client,
         }
+    }
+
+    /// Create a mock custodian set manager account for testing.
+    /// Returns the account pubkey and the expected custodian config hash.
+    pub fn create_mock_custodian_set_manager(&mut self, config_id: u32) -> (Pubkey, [u8; 32]) {
+        let (data, expected_hash) = self.client.generate_mock_custodian_config_data(config_id);
+
+        // Create a new account pubkey
+        let account_pubkey = Pubkey::new_unique();
+
+        // Create account with the mock data
+        let account = Account {
+            lamports: 1_000_000, // 0.001 SOL should be enough
+            data,
+            owner: solana_sdk::system_program::id(),
+            executable: false,
+            rent_epoch: 0,
+        };
+
+        // Set the account in the context
+        self.context.set_account(&account_pubkey, &account.into());
+
+        (account_pubkey, expected_hash)
     }
 }

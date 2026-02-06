@@ -11,6 +11,7 @@ const TEST_PRIVATE_KEY_FAKE_ZKP_SINGLE_BLOCK: [u8; 32] = [1u8; 32];
 const TEST_PRIVATE_KEY_FAKE_ZKP_REORG: [u8; 32] = [2u8; 32];
 const TEST_PRIVATE_KEY_FAKE_ZKP_MANUAL_DEPOSIT: [u8; 32] = [3u8; 32];
 const TEST_PRIVATE_KEY_FAKE_ZKP_WITHDRAWAL: [u8; 32] = [4u8; 32];
+const TEST_PRIVATE_KEY_FAKE_ZKP_CUSTODIAN_TRANSITION: [u8; 32] = [5u8; 32];
 
 pub struct FakeZKProofKeyPair {
     pub private_key: [u8; 32],
@@ -57,6 +58,7 @@ pub struct FakeZKProofGenerator {
     pub reorg: FakeZKProofKeyPair,
     pub manual_deposit: FakeZKProofKeyPair,
     pub withdrawal: FakeZKProofKeyPair,
+    pub custodian_transition: FakeZKProofKeyPair,
 }
 
 impl FakeZKProofGenerator {
@@ -71,6 +73,9 @@ impl FakeZKProofGenerator {
             )?,
             withdrawal: FakeZKProofKeyPair::new_from_private_key(
                 TEST_PRIVATE_KEY_FAKE_ZKP_WITHDRAWAL,
+            )?,
+            custodian_transition: FakeZKProofKeyPair::new_from_private_key(
+                TEST_PRIVATE_KEY_FAKE_ZKP_CUSTODIAN_TRANSITION,
             )?,
         })
     }

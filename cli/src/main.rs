@@ -8,6 +8,10 @@ mod commands;
 use commands::{
     create_dogemint::CreateDogemintArgs,
     create_user::CreateUserArgs,
+    custodian_transition::{
+        NotifyCustodianUpdateArgs, PauseForTransitionArgs,
+        CancelTransitionArgs, TransitionStatusArgs,
+    },
     generate_keys::GenerateKeysArgs,
     initialize::InitializeBridgeArgs,
     initialize_from_doge::InitializeFromDogeArgs,
@@ -50,6 +54,18 @@ enum Commands {
 
     /// Setup ATAs for existing users and optionally set close authority to null
     SetupUserAtas(SetupUserAtasArgs),
+
+    /// Notify the bridge of a new custodian config from the custodian set manager
+    NotifyCustodianUpdate(NotifyCustodianUpdateArgs),
+
+    /// Pause deposits for custodian transition after grace period has elapsed
+    PauseForTransition(PauseForTransitionArgs),
+
+    /// Cancel a pending custodian transition (emergency use)
+    CancelTransition(CancelTransitionArgs),
+
+    /// Query the current custodian transition status
+    TransitionStatus(TransitionStatusArgs),
 }
 
 fn main() -> Result<()> {
@@ -62,5 +78,9 @@ fn main() -> Result<()> {
         Commands::InitializeFromDogeData(args) => commands::initialize_from_doge::execute(&cli.rpc_url, cli.keypair, args),
         Commands::CreateUser(args) => commands::create_user::execute(&cli.rpc_url, cli.keypair, args),
         Commands::SetupUserAtas(args) => commands::setup_user_atas::execute(&cli.rpc_url, cli.keypair, args),
+        Commands::NotifyCustodianUpdate(args) => commands::custodian_transition::execute_notify_custodian_update(&cli.rpc_url, cli.keypair, args),
+        Commands::PauseForTransition(args) => commands::custodian_transition::execute_pause_for_transition(&cli.rpc_url, cli.keypair, args),
+        Commands::CancelTransition(args) => commands::custodian_transition::execute_cancel_transition(&cli.rpc_url, cli.keypair, args),
+        Commands::TransitionStatus(args) => commands::custodian_transition::execute_transition_status(&cli.rpc_url, args),
     }
 }

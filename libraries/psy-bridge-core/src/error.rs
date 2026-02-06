@@ -302,6 +302,26 @@ pub enum DogeBridgeError {
 
     #[error("Invalid Doge transaction hash")]
     InvalidDogeTxHash = 952,
+
+    // Custodian Transition Errors (960-980)
+    #[error("No custodian transition is pending")]
+    NoCustodianTransitionPending = 960,
+    #[error("Custodian transition grace period not elapsed")]
+    CustodianTransitionGracePeriodNotElapsed = 961,
+    #[error("Deposits are already paused for transition")]
+    DepositsAlreadyPausedForTransition = 962,
+    #[error("Deposits are not paused - cannot process transition")]
+    DepositsNotPausedForTransition = 963,
+    #[error("Consolidation target not reached")]
+    ConsolidationTargetNotReached = 964,
+    #[error("Invalid custodian config hash")]
+    InvalidCustodianConfigHash = 965,
+    #[error("Custodian config account not owned by expected program")]
+    InvalidCustodianConfigAccountOwner = 966,
+    #[error("Deposits are paused - operation not allowed")]
+    DepositsArePaused = 967,
+    #[error("Custodian transition already in progress")]
+    CustodianTransitionAlreadyInProgress = 968,
 }
 #[cfg(feature = "solprogram")]
 impl solana_program_error::ToStr for DogeBridgeError {
@@ -434,6 +454,17 @@ impl solana_program_error::ToStr for DogeBridgeError {
             DogeBridgeError::InvalidTxoBufferPDA => "Invalid txo buffer PDA",
             DogeBridgeError::CannotUnlockAfterAutoAdvance => "Cannot unlock pending mint buffer after auto advancing pending mint state",
             DogeBridgeError::InvalidDogeTxHash => "Invalid Doge transaction hash",
+
+            // Custodian Transition
+            DogeBridgeError::NoCustodianTransitionPending => "No custodian transition is pending",
+            DogeBridgeError::CustodianTransitionGracePeriodNotElapsed => "Custodian transition grace period not elapsed",
+            DogeBridgeError::DepositsAlreadyPausedForTransition => "Deposits are already paused for transition",
+            DogeBridgeError::DepositsNotPausedForTransition => "Deposits are not paused - cannot process transition",
+            DogeBridgeError::ConsolidationTargetNotReached => "Consolidation target not reached",
+            DogeBridgeError::InvalidCustodianConfigHash => "Invalid custodian config hash",
+            DogeBridgeError::InvalidCustodianConfigAccountOwner => "Custodian config account not owned by expected program",
+            DogeBridgeError::DepositsArePaused => "Deposits are paused - operation not allowed",
+            DogeBridgeError::CustodianTransitionAlreadyInProgress => "Custodian transition already in progress",
         }
     }
 }

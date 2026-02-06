@@ -14,6 +14,10 @@ pub const DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP: u8 = 7;
 pub const DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS: u8 = 8;
 pub const DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE: u8 = 9;
 pub const DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS: u8 = 10;
+pub const DOGE_BRIDGE_INSTRUCTION_NOTIFY_CUSTODIAN_CONFIG_UPDATE: u8 = 11;
+pub const DOGE_BRIDGE_INSTRUCTION_PAUSE_DEPOSITS_FOR_TRANSITION: u8 = 12;
+pub const DOGE_BRIDGE_INSTRUCTION_PROCESS_CUSTODIAN_TRANSITION: u8 = 13;
+pub const DOGE_BRIDGE_INSTRUCTION_CANCEL_CUSTODIAN_TRANSITION: u8 = 14;
 
 #[macro_rules_attribute::apply(crate::DeriveCopySerializeDefaultReprC)]
 pub struct InitializeBridgeParams {
@@ -129,10 +133,10 @@ impl<'a> BlockUpdateReader<'a> {
 
         let item_size = std::mem::size_of::<FinalizedBlockMintTxoInfo>();
         let remaining_len = data.len() - fixed_size;
-        
+
         let items = if remaining_len > 0 { remaining_len / item_size } else { 0 };
         let mut extra_blocks = Vec::with_capacity(items);
-        
+
         for i in 0..items {
             let start = fixed_size + i * item_size;
             let item_bytes = &data[start..(start + item_size)];
@@ -146,5 +150,32 @@ impl<'a> BlockUpdateReader<'a> {
             header: &fixed.header,
             extra_finalized_blocks: extra_blocks,
         })
+    }
+}
+
+// Custodian Transition Instruction Data Structures
+
+#[macro_rules_attribute::apply(crate::DeriveCopySerializeDefaultReprC)]
+pub struct NotifyCustodianConfigUpdateInstructionData {
+    pub expected_new_custodian_config_hash: QHash256,
+}
+
+/// Instruction data for processing a custodian transition.
+///
+/// The ZKP verifies a transaction that spends the return TXO from the old custodian
+/// to the new custodian. The program separately verifies that all deposits have been
+/// consolidated using the next_index approach.
+#[macro_rules_attribute::apply(crate::DeriveCopySerializeReprC)]
+pub struct ProcessCustodianTransitionInstructionData {
+    #[cfg_attr(feature = "serialize_serde", serde(with = "psy_bridge_core::serde_arrays::serde_arrays"))]
+    pub proof: CompactBridgeZKProof,
+    pub new_return_output: PsyReturnTxOutput,
+}
+impl Default for ProcessCustodianTransitionInstructionData {
+    fn default() -> Self {
+        Self {
+            proof: [0u8; 256],
+            new_return_output: PsyReturnTxOutput::default(),
+        }
     }
 }

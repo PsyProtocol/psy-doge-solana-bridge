@@ -4,7 +4,7 @@
 .PHONY: help check-tools start-validator stop-validator build-programs deploy-programs \
         run-local-tests run-history-tests run-client-tests clean-ledger setup-and-test dev-test show-program-ids \
         build-cli init-bridge create-users setup-user-atas setup-bridge setup-bridge-clean setup-dev-env \
-        setup-dev-env-fast setup-metaplex-programs
+        setup-dev-env-fast setup-metaplex-programs test-custodian-transition run-custodian-tests
 
 # Metaplex program paths for local validator
 METAPLEX_LOCAL_DIR := $(HOME)/.local/share/metaplex-local-validator
@@ -57,6 +57,8 @@ help:
 	@echo "  run-history-tests - Run history sync tests (requires validator)"
 	@echo "  run-client-tests  - Run bridge client tests (requires validator)"
 	@echo "  run-integration   - Run solana-program-test integration tests"
+	@echo "  test-custodian-transition - Run custodian transition integration tests"
+	@echo "  run-custodian-tests       - Run custodian transition tests on local validator"
 	@echo ""
 	@echo "Workflows:"
 	@echo "  setup-and-test    - Full setup: start validator, deploy, run tests"
@@ -232,6 +234,15 @@ run-client-tests:
 run-integration:
 	@echo "Running solana-program-test integration tests..."
 	cd tests/integration && cargo test -- --nocapture
+
+# Custodian transition testing
+test-custodian-transition:
+	@echo "Running custodian transition tests..."
+	cd tests/integration && cargo test test_custodian -- --nocapture
+
+# Run custodian transition tests on local validator
+run-custodian-tests: run-local-tests
+	cd tests/local-network-tests && NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1 cargo test test_custodian -- --test-threads=1 --nocapture
 
 # Full setup: start validator, deploy programs, run tests
 # Use SHIM=1 for noopshim, SHIM=2 for wormhole: make setup-and-test SHIM=1

@@ -10,7 +10,7 @@ use bytemuck::from_bytes;
 use psy_bridge_core::common_types::QHash256;
 use psy_bridge_core::crypto::hash::merkle::fixed_append_tree::FixedMerkleAppendTreePartialMerkleProof;
 use psy_bridge_core::crypto::hash::sha256::btc_hash256_bytes;
-use psy_bridge_core::crypto::zk::{CompactBridgeZKProof, CompactBridgeZKVerifierKey};
+use psy_bridge_core::crypto::zk::{CompactBridgeZKProof, CompactBridgeZKVerifierKey, CompactZKProofVerifier};
 use psy_bridge_core::error::DogeBridgeError;
 use psy_bridge_core::header::PsyBridgeHeader;
 use psy_doge_solana_core::data_accounts::pending_mint::{
@@ -21,11 +21,18 @@ use psy_doge_solana_core::generic_cpi::{
     UnlockAutoClaimMintBufferCPIHelper,
 };
 use psy_doge_solana_core::instructions::doge_bridge::{
-    BlockUpdateFixedData, DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE, DOGE_BRIDGE_INSTRUCTION_INITIALIZE, DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES, DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP, DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS, InitializeBridgeInstructionData, ProcessManualDepositInstructionData, ProcessWithdrawalInstructionData, RequestWithdrawalInstructionData
+    BlockUpdateFixedData, DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE, DOGE_BRIDGE_INSTRUCTION_INITIALIZE, DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES, DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP, DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS, InitializeBridgeInstructionData, ProcessManualDepositInstructionData, ProcessWithdrawalInstructionData, RequestWithdrawalInstructionData,
+    DOGE_BRIDGE_INSTRUCTION_NOTIFY_CUSTODIAN_CONFIG_UPDATE, DOGE_BRIDGE_INSTRUCTION_PAUSE_DEPOSITS_FOR_TRANSITION,
+    DOGE_BRIDGE_INSTRUCTION_PROCESS_CUSTODIAN_TRANSITION, DOGE_BRIDGE_INSTRUCTION_CANCEL_CUSTODIAN_TRANSITION,
+    NotifyCustodianConfigUpdateInstructionData, ProcessCustodianTransitionInstructionData,
 };
 use psy_doge_solana_core::instructions::doge_bridge::{
     DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE,
     DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS,
+};
+use psy_doge_solana_core::constants::{
+    CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS, CUSTODIAN_TRANSITION_MIN_SOLANA_BUFFER_SECONDS,
+    DEPOSITS_PAUSED_MODE_ACTIVE, DEPOSITS_PAUSED_MODE_PAUSED,
 };
 use psy_doge_solana_core::program_state::{FinalizedBlockMintTxoInfo, PsyReturnTxOutput, PsyWithdrawalRequest};
 use solana_program::instruction::{AccountMeta, Instruction};
@@ -59,6 +66,11 @@ const WITHDRAWAL_VK: CompactBridgeZKVerifierKey = [
     8, 226, 175, 15, 239, 184, 85, 227, 153, 188, 3, 12, 129, 135, 7, 228, 244, 252, 32, 220, 134,
     243, 114, 51, 151, 15, 18, 170, 135, 135, 20, 16,
 ];
+#[cfg(feature = "mock-zkp")]
+const CUSTODIAN_TRANSITION_VK: CompactBridgeZKVerifierKey = [
+    42, 117, 193, 88, 201, 156, 44, 27, 139, 67, 211, 184, 95, 120, 33, 167, 189, 244, 102, 73,
+    218, 91, 155, 12, 48, 99, 178, 64, 201, 177, 142, 99,
+];
 
 #[cfg(not(feature = "mock-zkp"))]
 use psy_bridge_core::crypto::zk::sp1_groth16::SP1Groth16Verifier as ZKVerifier;
@@ -68,6 +80,8 @@ pub const SINGLE_BLOCK_UPDATE_VK: CompactBridgeZKVerifierKey = [0u8; 32];
 pub const BLOCK_REORG_VK: CompactBridgeZKVerifierKey = [0u8; 32];
 #[cfg(not(feature = "mock-zkp"))]
 pub const WITHDRAWAL_VK: CompactBridgeZKVerifierKey = [0u8; 32];
+#[cfg(not(feature = "mock-zkp"))]
+pub const CUSTODIAN_TRANSITION_VK: CompactBridgeZKVerifierKey = [0u8; 32];
 
 pub fn process_instruction(
     program_id: &Pubkey,
@@ -205,6 +219,31 @@ pub fn process_instruction(
         }
         DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS => {
             process_snapshot_withdrawals(program_id, accounts)
+        }
+        DOGE_BRIDGE_INSTRUCTION_NOTIFY_CUSTODIAN_CONFIG_UPDATE => {
+            if data.len() != std::mem::size_of::<NotifyCustodianConfigUpdateInstructionData>() {
+                return Err(BridgeError::SerializationError.into());
+            }
+            let params: &NotifyCustodianConfigUpdateInstructionData = from_bytes(data);
+            process_notify_custodian_config_update(program_id, accounts, params)
+        }
+        DOGE_BRIDGE_INSTRUCTION_PAUSE_DEPOSITS_FOR_TRANSITION => {
+            process_pause_deposits_for_transition(program_id, accounts)
+        }
+        DOGE_BRIDGE_INSTRUCTION_PROCESS_CUSTODIAN_TRANSITION => {
+            if data.len() != std::mem::size_of::<ProcessCustodianTransitionInstructionData>() {
+                return Err(BridgeError::SerializationError.into());
+            }
+            let params: &ProcessCustodianTransitionInstructionData = from_bytes(data);
+            process_custodian_transition(
+                program_id,
+                accounts,
+                &params.proof,
+                params.new_return_output,
+            )
+        }
+        DOGE_BRIDGE_INSTRUCTION_CANCEL_CUSTODIAN_TRANSITION => {
+            process_cancel_custodian_transition(program_id, accounts)
         }
         _ => Err(BridgeError::SerializationError.into()),
     }
@@ -397,6 +436,23 @@ fn run_block_update_common(
         .bridge_header
         .finalized_state
         .auto_claimed_deposits_next_index;
+
+    // Check if deposits are paused for custodian transition
+    // If paused, reject blocks that would add new auto-claim deposits
+    if bridge_state.core_state.deposits_paused_mode != DEPOSITS_PAUSED_MODE_ACTIVE {
+        // Check if new header would add auto-claim deposits
+        let new_deposits_count = new_header
+            .finalized_state
+            .auto_claimed_deposits_next_index
+            .saturating_sub(old_index);
+        if new_deposits_count > 0 {
+            msg!(
+                "Deposits are paused for custodian transition. Cannot process block with {} new deposits.",
+                new_deposits_count
+            );
+            return Err(DogeBridgeError::DepositsArePaused.into());
+        }
+    }
 
     if is_reorg {
         bridge_state
@@ -1005,6 +1061,12 @@ fn process_process_manual_deposit(
         let bridge_state = bytemuck::try_from_bytes_mut::<BridgeState>(&mut data)
             .map_err(|_| BridgeError::SerializationError)?;
 
+        // Check if deposits are paused for custodian transition
+        if bridge_state.core_state.deposits_paused_mode != DEPOSITS_PAUSED_MODE_ACTIVE {
+            msg!("Deposits are paused for custodian transition. Manual deposits not allowed.");
+            return Err(DogeBridgeError::DepositsArePaused.into());
+        }
+
         bridge_state.core_state.process_manual_claimed_deposit(
             tx_hash,
             recent_block_merkle_tree_root,
@@ -1152,7 +1214,7 @@ fn process_snapshot_withdrawals(
     let (bridge_pda, _bump) = Pubkey::find_program_address(&[b"bridge_state"], program_id);
     if bridge_pda != *bridge_state_account.key {
         return Err(BridgeError::InvalidPDA.into());
-    } 
+    }
 
     let mut data = bridge_state_account.try_borrow_mut_data()?;
     let bridge_state = bytemuck::try_from_bytes_mut::<BridgeState>(&mut data)
@@ -1164,5 +1226,334 @@ fn process_snapshot_withdrawals(
     bridge_state.core_state.snapshot_for_withdrawal(
         current_timestamp,
     );
+    Ok(())
+}
+
+// ============================================================================
+// Custodian Transition Processors
+// ============================================================================
+
+/// Notifies the bridge of a pending custodian config update from the wormhole custodian manager.
+/// This begins the transition grace period.
+fn process_notify_custodian_config_update(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    params: &NotifyCustodianConfigUpdateInstructionData,
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+
+    let bridge_state_account = next_account_info(account_info_iter)?;
+    let custodian_set_manager_account = next_account_info(account_info_iter)?;
+    let operator = next_account_info(account_info_iter)?;
+
+    // Verify operator signature
+    if !operator.is_signer {
+        return Err(solana_program::program_error::ProgramError::MissingRequiredSignature);
+    }
+
+    // Verify Bridge State PDA
+    let (bridge_pda, _bump) = Pubkey::find_program_address(&[b"bridge_state"], program_id);
+    if bridge_state_account.key != &bridge_pda {
+        return Err(BridgeError::InvalidPDA.into());
+    }
+
+    let mut data = bridge_state_account.try_borrow_mut_data()?;
+    let bridge_state = bytemuck::try_from_bytes_mut::<BridgeState>(&mut data)
+        .map_err(|_| BridgeError::SerializationError)?;
+
+    // Verify operator is authorized
+    if operator.key.to_bytes() != bridge_state.core_state.access_control.operator_pubkey {
+        return Err(solana_program::program_error::ProgramError::MissingRequiredSignature);
+    }
+
+    // Check if transition is already in progress
+    if bridge_state.core_state.is_custodian_transition_pending() {
+        return Err(DogeBridgeError::CustodianTransitionAlreadyInProgress.into());
+    }
+
+    // Read custodian config from the custodian set manager account
+    // The account data starts with 8 bytes discriminator, then the config
+    let custodian_data = custodian_set_manager_account.try_borrow_data()?;
+    if custodian_data.len() < 8 + std::mem::size_of::<psy_bridge_core::custodian_config::RemoteMultisigCustodianConfig>() {
+        return Err(BridgeError::InvalidAccountInput.into());
+    }
+
+    // Extract the RemoteMultisigCustodianConfig (after 8-byte discriminator + 32-byte operator pubkey)
+    let config_offset = 8 + 32; // discriminator + operator pubkey
+    let config_end = config_offset + std::mem::size_of::<psy_bridge_core::custodian_config::RemoteMultisigCustodianConfig>();
+    if custodian_data.len() < config_end {
+        return Err(BridgeError::InvalidAccountInput.into());
+    }
+
+    let remote_config: &psy_bridge_core::custodian_config::RemoteMultisigCustodianConfig =
+        bytemuck::from_bytes(&custodian_data[config_offset..config_end]);
+
+    // Compute the full custodian config hash using the bridge PDA as emitter
+    // Network type is stored somewhere or we use a constant - using 0 for now
+    let full_config = psy_bridge_core::custodian_config::FullMultisigCustodianConfig {
+        emitter_pubkey: bridge_pda.to_bytes(),
+        signer_public_keys: remote_config.signer_public_keys,
+        custodian_config_id: remote_config.custodian_config_id,
+        signer_public_keys_y_parity: remote_config.signer_public_keys_y_parity as u16,
+        network_type: 0, // TODO: Get from config or constant
+    };
+    let computed_hash = full_config.get_wallet_config_hash();
+
+    // Verify the computed hash matches the expected hash
+    if computed_hash != params.expected_new_custodian_config_hash {
+        msg!("Computed custodian config hash does not match expected");
+        return Err(DogeBridgeError::InvalidCustodianConfigHash.into());
+    }
+
+    // Store the new custodian config hash and start the grace period
+    let current_timestamp = (Clock::get()?.unix_timestamp & 0xFFFFFFFFi64) as u32;
+    bridge_state.core_state.incoming_transition_custodian_config_hash = computed_hash;
+    bridge_state.core_state.last_detected_custodian_transition_seconds = current_timestamp;
+
+    msg!("Custodian config update notified. Grace period started at: {}", current_timestamp);
+
+    Ok(())
+}
+
+/// Pauses deposits after the grace period has elapsed, beginning the consolidation phase.
+fn process_pause_deposits_for_transition(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+
+    let bridge_state_account = next_account_info(account_info_iter)?;
+    let operator = next_account_info(account_info_iter)?;
+
+    // Verify operator signature
+    if !operator.is_signer {
+        return Err(solana_program::program_error::ProgramError::MissingRequiredSignature);
+    }
+
+    // Verify Bridge State PDA
+    let (bridge_pda, _bump) = Pubkey::find_program_address(&[b"bridge_state"], program_id);
+    if bridge_state_account.key != &bridge_pda {
+        return Err(BridgeError::InvalidPDA.into());
+    }
+
+    let mut data = bridge_state_account.try_borrow_mut_data()?;
+    let bridge_state = bytemuck::try_from_bytes_mut::<BridgeState>(&mut data)
+        .map_err(|_| BridgeError::SerializationError)?;
+
+    // Verify operator is authorized
+    if operator.key.to_bytes() != bridge_state.core_state.access_control.operator_pubkey {
+        return Err(solana_program::program_error::ProgramError::MissingRequiredSignature);
+    }
+
+    // Verify transition is pending
+    if !bridge_state.core_state.is_custodian_transition_pending() {
+        return Err(DogeBridgeError::NoCustodianTransitionPending.into());
+    }
+
+    // Verify deposits are not already paused
+    if bridge_state.core_state.deposits_paused_mode != DEPOSITS_PAUSED_MODE_ACTIVE {
+        return Err(DogeBridgeError::DepositsAlreadyPausedForTransition.into());
+    }
+
+    // Check grace period has elapsed
+    let current_solana_time = (Clock::get()?.unix_timestamp & 0xFFFFFFFFi64) as u32;
+    let doge_block_time = bridge_state.core_state.bridge_header.tip_state.block_time;
+
+    // Use min(doge_block_time, current_solana_time + buffer) to determine effective time
+    let effective_time = std::cmp::min(
+        doge_block_time,
+        current_solana_time.saturating_add(CUSTODIAN_TRANSITION_MIN_SOLANA_BUFFER_SECONDS)
+    );
+
+    let grace_period_end = bridge_state
+        .core_state
+        .last_detected_custodian_transition_seconds
+        .saturating_add(CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS);
+
+    if effective_time <= grace_period_end {
+        msg!(
+            "Grace period not elapsed. Effective time: {}, Grace period end: {}",
+            effective_time,
+            grace_period_end
+        );
+        return Err(DogeBridgeError::CustodianTransitionGracePeriodNotElapsed.into());
+    }
+
+    // Pause deposits
+    bridge_state.core_state.deposits_paused_mode = DEPOSITS_PAUSED_MODE_PAUSED;
+
+    msg!("Deposits paused for custodian transition. Consolidation can now begin.");
+
+    Ok(())
+}
+
+/// Processes the custodian transition after consolidation is complete.
+/// Verifies the ZKP and updates the custodian config.
+/// Process a custodian transition.
+///
+/// The ZKP verifies a transaction that spends the return TXO from the old custodian
+/// to the new custodian. The program separately verifies that all deposits have been
+/// consolidated by checking total_spent_deposit_utxo_count against the consolidation target.
+fn process_custodian_transition(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    proof: &CompactBridgeZKProof,
+    new_return_output: PsyReturnTxOutput,
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+
+    // Core Accounts
+    let bridge_state_account = next_account_info(account_info_iter)?;
+    let doge_tx_buffer = next_account_info(account_info_iter)?;
+
+    // Wormhole Shim Accounts (same as process_withdrawal)
+    let shim_program_id = next_account_info(account_info_iter)?;
+    let bridge_config = next_account_info(account_info_iter)?;
+    let message = next_account_info(account_info_iter)?;
+    let sequence = next_account_info(account_info_iter)?;
+    let payer = next_account_info(account_info_iter)?;
+    let fee_collector = next_account_info(account_info_iter)?;
+    let clock_account = next_account_info(account_info_iter)?;
+    let system_program = next_account_info(account_info_iter)?;
+    let core_bridge_program = next_account_info(account_info_iter)?;
+    let event_authority = next_account_info(account_info_iter)?;
+
+    // Verify Bridge State PDA
+    let (bridge_pda, bump) = Pubkey::find_program_address(&[b"bridge_state"], program_id);
+    if bridge_state_account.key != &bridge_pda {
+        return Err(BridgeError::InvalidPDA.into());
+    }
+    let seeds = &[b"bridge_state", &[bump][..]];
+
+    // Verify Generic Buffer
+    if doge_tx_buffer.owner != &GENERIC_BUFFER_BUILDER_PROGRAM_ID {
+        return Err(solana_program::program_error::ProgramError::IllegalOwner);
+    }
+
+    let mut data = bridge_state_account.try_borrow_mut_data()?;
+    let bridge_state = bytemuck::try_from_bytes_mut::<BridgeState>(&mut data)
+        .map_err(|_| BridgeError::SerializationError)?;
+
+    // Verify deposits are paused
+    if bridge_state.core_state.deposits_paused_mode != DEPOSITS_PAUSED_MODE_PAUSED {
+        return Err(DogeBridgeError::DepositsNotPausedForTransition.into());
+    }
+
+    // Calculate consolidation target dynamically (reorg-safe)
+    // Target = total auto-claimed deposits + total manual deposits
+    let consolidation_target = (bridge_state
+        .core_state
+        .bridge_header
+        .finalized_state
+        .auto_claimed_deposits_next_index as u64)
+        + (bridge_state.core_state.manual_deposits_tree.next_index as u64);
+
+    // Verify all deposits have been spent (consolidated)
+    // This check uses the current total_spent_deposit_utxo_count which was
+    // updated during previous withdrawal processing
+    let current_spent = bridge_state.core_state.total_spent_deposit_utxo_count;
+    if current_spent < consolidation_target {
+        msg!(
+            "Consolidation target not reached. Target: {}, Spent: {}",
+            consolidation_target,
+            current_spent
+        );
+        return Err(DogeBridgeError::ConsolidationTargetNotReached.into());
+    }
+
+    // Compute expected public inputs for the custodian transition proof
+    // The ZKP only verifies the transfer from old to new custodian
+    let expected_public_inputs = bridge_state
+        .core_state
+        .get_expected_public_inputs_for_custodian_transition_proof(&new_return_output);
+
+    // Verify ZKP
+    let verification_result = ZKVerifier::verify_compact_zkp_slice(proof, &CUSTODIAN_TRANSITION_VK, &expected_public_inputs);
+    if !verification_result {
+        msg!("Custodian transition ZKP verification failed");
+        return Err(DogeBridgeError::BridgeZKPError.into());
+    }
+
+    // Complete the transition
+    bridge_state.core_state.complete_custodian_transition(new_return_output);
+
+    // Read transaction data for Wormhole VAA
+    let dogecoin_tx = doge_tx_buffer.try_borrow_data()?;
+    if dogecoin_tx.len() < 32 {
+        return Err(BridgeError::InvalidAccountInput.into());
+    }
+    let tx_data = &dogecoin_tx[32..];
+    let sighash = new_return_output.sighash;
+
+    let nonce = (bridge_state.core_state.next_processed_withdrawals_index & 0xFFFFFFFF) as u32;
+
+    drop(data);
+
+    // Send Wormhole VAA to signal transition to old custodian set
+    send_wormhole_vaa(
+        nonce,
+        shim_program_id,
+        bridge_config,
+        message,
+        bridge_state_account,
+        sequence,
+        payer,
+        fee_collector,
+        clock_account,
+        system_program,
+        core_bridge_program,
+        event_authority,
+        seeds,
+        &sighash,
+        tx_data,
+    )?;
+
+    msg!("Custodian transition completed successfully");
+
+    Ok(())
+}
+
+/// Cancels a pending custodian transition (emergency use only).
+fn process_cancel_custodian_transition(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+
+    let bridge_state_account = next_account_info(account_info_iter)?;
+    let operator = next_account_info(account_info_iter)?;
+
+    // Verify operator signature
+    if !operator.is_signer {
+        return Err(solana_program::program_error::ProgramError::MissingRequiredSignature);
+    }
+
+    // Verify Bridge State PDA
+    let (bridge_pda, _bump) = Pubkey::find_program_address(&[b"bridge_state"], program_id);
+    if bridge_state_account.key != &bridge_pda {
+        return Err(BridgeError::InvalidPDA.into());
+    }
+
+    let mut data = bridge_state_account.try_borrow_mut_data()?;
+    let bridge_state = bytemuck::try_from_bytes_mut::<BridgeState>(&mut data)
+        .map_err(|_| BridgeError::SerializationError)?;
+
+    // Verify operator is authorized
+    if operator.key.to_bytes() != bridge_state.core_state.access_control.operator_pubkey {
+        return Err(solana_program::program_error::ProgramError::MissingRequiredSignature);
+    }
+
+    // Verify there's a transition to cancel
+    if !bridge_state.core_state.is_custodian_transition_pending()
+        && bridge_state.core_state.deposits_paused_mode == DEPOSITS_PAUSED_MODE_ACTIVE
+    {
+        return Err(DogeBridgeError::NoCustodianTransitionPending.into());
+    }
+
+    // Cancel the transition
+    bridge_state.core_state.cancel_custodian_transition();
+
+    msg!("Custodian transition cancelled");
+
     Ok(())
 }

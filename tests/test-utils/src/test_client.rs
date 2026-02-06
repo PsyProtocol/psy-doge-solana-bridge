@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use doge_bridge_client::instructions;
+use psy_bridge_core::custodian_config::{FullMultisigCustodianConfig, RemoteMultisigCustodianConfig};
 use psy_doge_solana_core::data_accounts::pending_mint::{
     PendingMint, PM_DA_PENDING_MINT_SIZE as PENDING_MINT_SIZE, PM_MAX_PENDING_MINTS_PER_GROUP,
 };
@@ -196,5 +197,82 @@ impl TestBridgeClient {
             &self.txo_buffer_program_id,
         );
         buffer_pubkey
+    }
+
+    // ========================================================================
+    // Custodian Transition Helpers
+    // ========================================================================
+
+    /// Notify the bridge of a custodian config update (starts grace period)
+    pub async fn notify_custodian_config_update(
+        &mut self,
+        custodian_set_manager_account: Pubkey,
+        expected_new_custodian_config_hash: [u8; 32],
+    ) {
+        let ix = instructions::notify_custodian_config_update(
+            self.program_id,
+            self.operator.pubkey(),
+            custodian_set_manager_account,
+            expected_new_custodian_config_hash,
+        );
+        self.send_tx(&[ix], &[&self.operator]).await;
+    }
+
+    /// Pause deposits for custodian transition (after grace period)
+    pub async fn pause_deposits_for_transition(&mut self) {
+        let ix = instructions::pause_deposits_for_transition(
+            self.program_id,
+            self.operator.pubkey(),
+        );
+        self.send_tx(&[ix], &[&self.operator]).await;
+    }
+
+    /// Cancel a pending custodian transition
+    pub async fn cancel_custodian_transition(&mut self) {
+        let ix = instructions::cancel_custodian_transition(
+            self.program_id,
+            self.operator.pubkey(),
+        );
+        self.send_tx(&[ix], &[&self.operator]).await;
+    }
+
+    /// Generate mock custodian set manager account data and the expected config hash.
+    /// Returns (account_data, expected_hash) that can be used with context.set_account().
+    pub fn generate_mock_custodian_config_data(&self, config_id: u32) -> (Vec<u8>, [u8; 32]) {
+        // Create a mock RemoteMultisigCustodianConfig with test data
+        let remote_config = RemoteMultisigCustodianConfig {
+            signer_public_keys: [
+                [1u8; 32], [2u8; 32], [3u8; 32], [4u8; 32],
+                [5u8; 32], [6u8; 32], [7u8; 32],
+            ],
+            custodian_config_id: config_id,
+            signer_public_keys_y_parity: 0,
+        };
+
+        // Account layout: 8 bytes discriminator + 32 bytes operator + RemoteMultisigCustodianConfig
+        let config_size = std::mem::size_of::<RemoteMultisigCustodianConfig>();
+        let total_size = 8 + 32 + config_size;
+        let mut data = vec![0u8; total_size];
+
+        // Set discriminator (arbitrary test value)
+        data[0..8].copy_from_slice(&[0xCC; 8]);
+
+        // Set operator pubkey
+        data[8..40].copy_from_slice(&self.operator.pubkey().to_bytes());
+
+        // Set RemoteMultisigCustodianConfig
+        data[40..].copy_from_slice(bytemuck::bytes_of(&remote_config));
+
+        // Compute the expected hash using FullMultisigCustodianConfig
+        let full_config = FullMultisigCustodianConfig {
+            emitter_pubkey: self.bridge_state_pda.to_bytes(),
+            signer_public_keys: remote_config.signer_public_keys,
+            custodian_config_id: remote_config.custodian_config_id,
+            signer_public_keys_y_parity: remote_config.signer_public_keys_y_parity as u16,
+            network_type: 0,
+        };
+        let expected_hash = full_config.get_wallet_config_hash();
+
+        (data, expected_hash)
     }
 }

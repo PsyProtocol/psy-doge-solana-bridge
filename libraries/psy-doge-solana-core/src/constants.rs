@@ -1,1 +1,8 @@
 pub const PSY_DOGE_BRIDGE_MAX_REORG_BLOCKS: usize = 10;
+
+// Custodian Transition Constants
+pub const CUSTODIAN_TRANSITION_GRACE_PERIOD_SECONDS: u32 = 2 * 60 * 60; // 2 hours
+pub const CUSTODIAN_TRANSITION_MIN_SOLANA_BUFFER_SECONDS: u32 = 10 * 60; // 10 minutes
+pub const DEPOSITS_PAUSED_MODE_ACTIVE: u32 = 0;
+pub const DEPOSITS_PAUSED_MODE_PAUSED: u32 = 1;
+pub const DEPOSITS_PAUSED_MODE_TRANSITIONING: u32 = 2;

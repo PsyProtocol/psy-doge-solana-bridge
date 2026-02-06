@@ -92,7 +92,7 @@ impl PsyBridgeProgramState {
         self.manual_deposits_tree = FixedMerkleAppendTree::new_empty();
         self.requested_withdrawals_tree = FixedMerkleAppendTree::new_empty();
         self.custodian_wallet_config_hash = initialize_instruction.custodian_wallet_config_hash;
-        self.incoming_transition_custodian_config_hash = initialize_instruction.custodian_wallet_config_hash;
+        self.incoming_transition_custodian_config_hash = [0u8; 32]; // No transition in progress at init
         self.bridge_control_mode = 0;
         self.next_recent_finalized_block_index = 0;
         self.last_processed_withdrawals_at_ms = 0;
@@ -238,6 +238,71 @@ impl PsyBridgeProgramState {
         }
         (INVALID_BLOCK_HEIGHT, QHash256::default())
 
+    }
+
+    // Custodian Transition Helper Methods
+
+    /// Check if a custodian transition is currently pending
+    pub fn is_custodian_transition_pending(&self) -> bool {
+        self.last_detected_custodian_transition_seconds != 0
+    }
+
+    /// Check if deposits are paused for transition
+    pub fn are_deposits_paused_for_transition(&self) -> bool {
+        self.deposits_paused_mode != 0
+    }
+
+    /// Get the expected public inputs for custodian transition proof.
+    ///
+    /// The ZKP verifies a transaction that spends the return TXO output from the old
+    /// custodian to the new custodian. The program separately verifies that all deposits
+    /// have been consolidated using the next_index approach before calling this.
+    pub fn get_expected_public_inputs_for_custodian_transition_proof(
+        &self,
+        new_return_output: &PsyReturnTxOutput,
+    ) -> QHash256 {
+        let new_return_output_hash = new_return_output.get_hash();
+        let old_return_output_hash = self.last_return_output.get_hash();
+
+        crate::public_inputs::get_custodian_transition_proof_public_inputs(
+            &old_return_output_hash,
+            &new_return_output_hash,
+            &self.custodian_wallet_config_hash,
+            &self.incoming_transition_custodian_config_hash,
+        )
+    }
+
+    /// Update state after custodian transition completes.
+    ///
+    /// The transition transaction spends the old return TXO to create a new one
+    /// under the new custodian's control. The program must verify that all deposits
+    /// have been consolidated before calling this method.
+    pub fn complete_custodian_transition(
+        &mut self,
+        new_return_output: PsyReturnTxOutput,
+    ) {
+        // Update custodian config to the new one
+        self.custodian_wallet_config_hash = self.incoming_transition_custodian_config_hash;
+
+        // Clear the incoming transition hash
+        self.incoming_transition_custodian_config_hash = [0u8; 32];
+
+        // Reset transition state
+        self.last_detected_custodian_transition_seconds = 0;
+        self.deposits_paused_mode = 0;
+
+        // Update return output (the new UTXO controlled by new custodian)
+        self.last_return_output = new_return_output;
+
+        // Record the transaction sighash
+        self.sent_transactions_tree.append(new_return_output.sighash);
+    }
+
+    /// Cancel a pending custodian transition (emergency use)
+    pub fn cancel_custodian_transition(&mut self) {
+        self.incoming_transition_custodian_config_hash = self.custodian_wallet_config_hash;
+        self.last_detected_custodian_transition_seconds = 0;
+        self.deposits_paused_mode = 0;
     }
     pub fn process_manual_claimed_deposit(
         &mut self,

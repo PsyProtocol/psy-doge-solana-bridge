@@ -1,7 +1,19 @@
 use psy_doge_solana_core::instructions::manual_claim::{MC_MANUAL_CLAIM_TRANSACTION_DESCRIMINATOR, ManualClaimInstruction};
 use psy_bridge_core::{common_types::QHash256, crypto::zk::CompactBridgeZKProof, header::PsyBridgeHeader};
 use psy_doge_solana_core::program_state::{FinalizedBlockMintTxoInfo, PsyReturnTxOutput, PsyWithdrawalRequest};
-use psy_doge_solana_core::instructions::doge_bridge::{BlockUpdateFixedData, DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE, DOGE_BRIDGE_INSTRUCTION_INITIALIZE, DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES, DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE, DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS, DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS, InitializeBridgeInstructionData, InitializeBridgeParams, ProcessManualDepositInstructionData, ProcessReorgBlocksFixedData, ProcessWithdrawalInstructionData, RequestWithdrawalInstructionData};
+use psy_doge_solana_core::instructions::doge_bridge::{
+    BlockUpdateFixedData, DOGE_BRIDGE_INSTRUCTION_BLOCK_UPDATE, DOGE_BRIDGE_INSTRUCTION_INITIALIZE,
+    DOGE_BRIDGE_INSTRUCTION_OPERATOR_WITHDRAW_FEES, DOGE_BRIDGE_INSTRUCTION_PROCESS_MANUAL_DEPOSIT,
+    DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP, DOGE_BRIDGE_INSTRUCTION_PROCESS_MINT_GROUP_AUTO_ADVANCE,
+    DOGE_BRIDGE_INSTRUCTION_PROCESS_REORG_BLOCKS, DOGE_BRIDGE_INSTRUCTION_PROCESS_WITHDRAWAL,
+    DOGE_BRIDGE_INSTRUCTION_REPLAY_WITHDRAWAL, DOGE_BRIDGE_INSTRUCTION_REQUEST_WITHDRAWAL,
+    DOGE_BRIDGE_INSTRUCTION_SNAPSHOT_WITHDRAWALS, InitializeBridgeInstructionData, InitializeBridgeParams,
+    ProcessManualDepositInstructionData, ProcessReorgBlocksFixedData, ProcessWithdrawalInstructionData,
+    RequestWithdrawalInstructionData,
+    DOGE_BRIDGE_INSTRUCTION_NOTIFY_CUSTODIAN_CONFIG_UPDATE, DOGE_BRIDGE_INSTRUCTION_PAUSE_DEPOSITS_FOR_TRANSITION,
+    DOGE_BRIDGE_INSTRUCTION_PROCESS_CUSTODIAN_TRANSITION, DOGE_BRIDGE_INSTRUCTION_CANCEL_CUSTODIAN_TRANSITION,
+    NotifyCustodianConfigUpdateInstructionData, ProcessCustodianTransitionInstructionData,
+};
 use solana_sdk::sysvar::clock;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -657,6 +669,133 @@ pub fn snapshot_withdrawals(
             AccountMeta::new(bridge_state, false),
             AccountMeta::new_readonly(operator, true),
             AccountMeta::new(payer, true),
+        ],
+        data,
+    }
+}
+
+// ============================================================================
+// Custodian Transition Instructions
+// ============================================================================
+
+/// Creates an instruction to notify the bridge of a custodian config update.
+pub fn notify_custodian_config_update(
+    program_id: Pubkey,
+    operator: Pubkey,
+    custodian_set_manager_account: Pubkey,
+    expected_new_custodian_config_hash: QHash256,
+) -> Instruction {
+    let (bridge_state, _) = Pubkey::find_program_address(&[b"bridge_state"], &program_id);
+
+    let data_struct = NotifyCustodianConfigUpdateInstructionData {
+        expected_new_custodian_config_hash,
+    };
+
+    let data = gen_aligned_instruction(
+        DOGE_BRIDGE_INSTRUCTION_NOTIFY_CUSTODIAN_CONFIG_UPDATE,
+        bytemuck::bytes_of(&data_struct),
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(bridge_state, false),
+            AccountMeta::new_readonly(custodian_set_manager_account, false),
+            AccountMeta::new_readonly(operator, true),
+        ],
+        data,
+    }
+}
+
+/// Creates an instruction to pause deposits for a custodian transition.
+pub fn pause_deposits_for_transition(
+    program_id: Pubkey,
+    operator: Pubkey,
+) -> Instruction {
+    let (bridge_state, _) = Pubkey::find_program_address(&[b"bridge_state"], &program_id);
+
+    let data = gen_aligned_instruction(DOGE_BRIDGE_INSTRUCTION_PAUSE_DEPOSITS_FOR_TRANSITION, &[]);
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(bridge_state, false),
+            AccountMeta::new_readonly(operator, true),
+        ],
+        data,
+    }
+}
+
+/// Creates an instruction to process a custodian transition.
+///
+/// The ZKP verifies a transaction that spends the return TXO from the old custodian
+/// to the new custodian. The program separately verifies that all deposits have been
+/// consolidated using the next_index approach.
+pub fn process_custodian_transition(
+    program_id: Pubkey,
+    payer: Pubkey,
+    generic_buffer_account: Pubkey,
+    wormhole_shim_program_id: Pubkey,
+    wormhole_core_program_id: Pubkey,
+    proof: CompactBridgeZKProof,
+    new_return_output: PsyReturnTxOutput,
+) -> Instruction {
+    let (bridge_state, _) = Pubkey::find_program_address(&[b"bridge_state"], &program_id);
+
+    // Derive Wormhole Accounts (same as process_withdrawal)
+    let (bridge_config, _) = Pubkey::find_program_address(&[b"Bridge"], &wormhole_core_program_id);
+    let (fee_collector, _) = Pubkey::find_program_address(&[b"fee_collector"], &wormhole_core_program_id);
+    let emitter = bridge_state;
+    let (sequence, _) = Pubkey::find_program_address(&[b"Sequence", emitter.as_ref()], &wormhole_core_program_id);
+    let (message, _) = Pubkey::find_program_address(&[emitter.as_ref()], &wormhole_shim_program_id);
+    let (event_authority, _) = Pubkey::find_program_address(&[b"__event_authority"], &wormhole_shim_program_id);
+
+    let data_struct = ProcessCustodianTransitionInstructionData {
+        proof,
+        new_return_output,
+    };
+
+    let data = gen_aligned_instruction(
+        DOGE_BRIDGE_INSTRUCTION_PROCESS_CUSTODIAN_TRANSITION,
+        bytemuck::bytes_of(&data_struct),
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            // Core Accounts
+            AccountMeta::new(bridge_state, false),
+            AccountMeta::new_readonly(generic_buffer_account, false),
+            // Wormhole Shim Accounts
+            AccountMeta::new_readonly(wormhole_shim_program_id, false),
+            AccountMeta::new(bridge_config, false),
+            AccountMeta::new(message, false),
+            AccountMeta::new(sequence, false),
+            AccountMeta::new(payer, true),
+            AccountMeta::new(fee_collector, false),
+            AccountMeta::new_readonly(clock::id(), false),
+            AccountMeta::new_readonly(system_program::id(), false),
+            AccountMeta::new_readonly(wormhole_core_program_id, false),
+            AccountMeta::new_readonly(event_authority, false),
+        ],
+        data,
+    }
+}
+
+/// Creates an instruction to cancel a pending custodian transition.
+pub fn cancel_custodian_transition(
+    program_id: Pubkey,
+    operator: Pubkey,
+) -> Instruction {
+    let (bridge_state, _) = Pubkey::find_program_address(&[b"bridge_state"], &program_id);
+
+    let data = gen_aligned_instruction(DOGE_BRIDGE_INSTRUCTION_CANCEL_CUSTODIAN_TRANSITION, &[]);
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(bridge_state, false),
+            AccountMeta::new_readonly(operator, true),
         ],
         data,
     }

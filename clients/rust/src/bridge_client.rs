@@ -166,6 +166,97 @@ impl DogeBridgeClient {
         );
         self.buffer_manager().send_tx(&[ix], &[]).await
     }
+
+    // ========================================================================
+    // Custodian Transition Methods
+    // ========================================================================
+
+    /// Notifies the bridge of a pending custodian config update.
+    /// This begins the 2-hour grace period for the transition.
+    pub async fn notify_custodian_config_update(
+        &self,
+        custodian_set_manager_account: Pubkey,
+        expected_new_custodian_config_hash: [u8; 32],
+    ) -> Result<(), ClientError> {
+        let ix = instructions::notify_custodian_config_update(
+            self.program_id,
+            self.operator.pubkey(),
+            custodian_set_manager_account,
+            expected_new_custodian_config_hash,
+        );
+        self.buffer_manager()
+            .send_tx(&[ix], &[&self.operator])
+            .await
+    }
+
+    /// Pauses deposits for a custodian transition after the grace period.
+    pub async fn pause_deposits_for_transition(&self) -> Result<(), ClientError> {
+        let ix = instructions::pause_deposits_for_transition(
+            self.program_id,
+            self.operator.pubkey(),
+        );
+        self.buffer_manager()
+            .send_tx(&[ix], &[&self.operator])
+            .await
+    }
+
+    /// Processes a custodian transition with the provided ZKP proof.
+    ///
+    /// The ZKP verifies a transaction that spends the return TXO from the old custodian
+    /// to the new custodian. The program separately verifies that all deposits have been
+    /// consolidated using the next_index approach.
+    pub async fn process_custodian_transition(
+        &self,
+        proof: CompactBridgeZKProof,
+        new_return_output: PsyReturnTxOutput,
+        doge_tx_bytes: &[u8],
+    ) -> Result<(), ClientError> {
+        let buffer = self
+            .buffer_manager()
+            .create_generic_buffer(self.generic_buffer_program_id, doge_tx_bytes)
+            .await?;
+        let ix = instructions::process_custodian_transition(
+            self.program_id,
+            self.payer.pubkey(),
+            buffer,
+            self.wormhole_shim_program_id,
+            self.wormhole_core_program_id,
+            proof,
+            new_return_output,
+        );
+        self.buffer_manager().send_tx(&[ix], &[]).await
+    }
+
+    /// Cancels a pending custodian transition.
+    pub async fn cancel_custodian_transition(&self) -> Result<(), ClientError> {
+        let ix = instructions::cancel_custodian_transition(
+            self.program_id,
+            self.operator.pubkey(),
+        );
+        self.buffer_manager()
+            .send_tx(&[ix], &[&self.operator])
+            .await
+    }
+}
+
+/// Status of an ongoing custodian transition.
+#[derive(Debug, Clone)]
+pub enum CustodianTransitionStatus {
+    /// No transition is in progress.
+    None,
+    /// A transition is pending but grace period is not over yet.
+    Pending {
+        new_config_hash: [u8; 32],
+        detected_at: u32,
+        grace_period_ends_at: u32,
+    },
+    /// Deposits are paused and consolidation is in progress.
+    DepositsPaused {
+        new_config_hash: [u8; 32],
+        current_auto_claimed_next_index: u64,
+        current_manual_deposits_next_index: u64,
+        current_spent_count: u64,
+    },
 }
 
 pub struct BlockUpdateBuilder<'a> {

@@ -14,6 +14,8 @@ pub enum BridgeError {
     InvalidAccountInput,
     #[error("Unauthorized Manual Claimer")]
     UnauthorizedManualClaimer,
+    #[error("Custodian Transition Error")]
+    CustodianTransitionError,
 }
 
 impl From<BridgeError> for ProgramError {

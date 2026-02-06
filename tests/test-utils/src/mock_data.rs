@@ -55,6 +55,11 @@ pub fn generate_manual_claim_fake_proof(public_inputs: [u8; 32]) -> CompactBridg
     generator.manual_deposit.generate_fake_zkp(public_inputs).unwrap().to_compact_zkp()
 }
 
+pub fn generate_custodian_transition_fake_proof(public_inputs: [u8; 32]) -> CompactBridgeZKProof {
+    let generator = FakeZKProofGenerator::new().unwrap();
+    generator.custodian_transition.generate_fake_zkp(public_inputs).unwrap().to_compact_zkp()
+}
+
 pub fn compute_pending_mints_hash(mints: &[PendingMint]) -> [u8; 32] {
     if mints.is_empty() {
         return PM_DA_DEFAULT_PENDING_MINTS_BUFFER_HASH;

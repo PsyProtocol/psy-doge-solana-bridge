@@ -20,7 +20,7 @@ members = [
 
 [workspace.dependencies]
 macro_rules_attribute = "0.2.2"
-
+shellexpand = "3.1.1"
 k256 = { version = "0.13.2", features = [
   "arithmetic",
   "ecdsa",
