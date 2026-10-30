@@ -17,7 +17,9 @@ pub fn calcuate_deposit_fee(
         .checked_div(deposit_fee_rate_denominator as u128)
         .ok_or_else(|| anyhow::anyhow!("Division by zero in fee calculation"))?
         .checked_add(flat_fee_per_deposit_sats as u128)
-        .ok_or_else(|| anyhow::anyhow!("Fee calculation overflow"))? as u64;
+        .ok_or_else(|| anyhow::anyhow!("Fee calculation overflow"))?;
+    let fees_generated = u64::try_from(fees_generated)
+        .map_err(|_| anyhow::anyhow!("Fee calculation exceeds u64"))?;
 
     Ok(FeeResult{
         fees_generated,
@@ -41,7 +43,9 @@ pub fn calcuate_withdrawal_fee(
         .checked_div(withdrawal_fee_rate_denominator as u128)
         .ok_or_else(|| anyhow::anyhow!("Division by zero in fee calculation"))?
         .checked_add(flat_fee_per_withdrawal_sats as u128)
-        .ok_or_else(|| anyhow::anyhow!("Fee calculation overflow"))? as u64;
+        .ok_or_else(|| anyhow::anyhow!("Fee calculation overflow"))?;
+    let fees_generated = u64::try_from(fees_generated)
+        .map_err(|_| anyhow::anyhow!("Fee calculation exceeds u64"))?;
 
     
     Ok(FeeResult{
@@ -56,6 +60,31 @@ pub fn calcuate_withdrawal_fee(
 mod tests {
     use super::{calcuate_deposit_fee as calcuate_fee, FeeResult};
     use proptest::prelude::*;
+    #[test]
+    fn rejects_fees_that_would_wrap_when_narrowed() {
+        for calculate in [calcuate_fee, super::calcuate_withdrawal_fee] {
+            // The old cast turned 2^64 into zero and accepted the full amount.
+            assert!(calculate(1 << 63, 0, 2, 1).is_err());
+            assert!(calculate(u64::MAX, 1, 1, 1).is_err());
+            assert!(calculate(u64::MAX, u64::MAX, u64::MAX, 1).is_err());
+        }
+    }
+
+    #[test]
+    fn validates_fee_boundaries_for_both_directions() {
+        for calculate in [calcuate_fee, super::calcuate_withdrawal_fee] {
+            assert!(calculate(1, 0, 1, 0).is_err());
+            assert!(calculate(100, 101, 0, 1).is_err());
+            assert_eq!(calculate(u64::MAX, 0, 1, 1).unwrap(), FeeResult {
+                fees_generated: u64::MAX,
+                amount_after_fees: 0,
+            });
+            assert_eq!(calculate(10_001, 1, 1, 100).unwrap(), FeeResult {
+                fees_generated: 101,
+                amount_after_fees: 9_900,
+            });
+        }
+    }
     pub fn calcuate_fee_float_implementation(
         total_deposit_amount: u64,
         flat_fee_per_deposit_sats: u64,
